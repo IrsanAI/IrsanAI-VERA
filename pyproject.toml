@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "irsanai-vera"
+version = "0.1.0"
+description = "Veridical Evidence Reasoning Architecture — domain-agnostic epistemology engine"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "IrsanAI", url = "https://github.com/IrsanAI" }
+]
+keywords = ["osint", "multi-agent", "bayesian", "knowledge-graph", "epistemology", "irsanai"]
+
+dependencies = [
+    # Core
+    "requests>=2.31.0",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.0",
+
+    # Bayesian / Statistics
+    "scipy>=1.12.0",
+    "numpy>=1.26.0",
+
+    # NLP / Semantic Search
+    "sentence-transformers>=2.6.0",
+    "chromadb>=0.4.22",
+
+    # Knowledge Graph
+    "networkx>=3.2.1",
+
+    # Persistence
+    "sqlite-utils>=3.36",
+
+    # Hardware detection
+    "psutil>=5.9.8",
+
+    # Dashboard
+    "streamlit>=1.32.0",
+    "plotly>=5.20.0",
+    "pandas>=2.2.0",
+
+    # API / Web
+    "fastapi>=0.111.0",
+    "uvicorn>=0.29.0",
+    "beautifulsoup4>=4.12.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+gpu = [
+    "torch>=2.2.0",
+]
+full = [
+    "irsanai-vera[dev,gpu]",
+]
+
+[project.scripts]
+vera = "vera:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "agents*", "ontologies*", "obsidian_writer*", "dashboard*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

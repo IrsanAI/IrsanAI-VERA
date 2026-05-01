@@ -1,0 +1,84 @@
+# ========================
+# IrsanAI-VERA .gitignore
+# ========================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+env/
+.env
+.venv/
+venv/
+ENV/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# Data — never commit raw investigation data
+data/
+*.jsonl
+*.db
+*.sqlite
+*.sqlite3
+
+# Reports — generated output
+AA_Reports/
+reports/
+*_FINAL.json
+*_FINAL_REPORT.json
+*.log
+
+# Hardware report — contains local system info
+IrsanAI_HW_Report.json
+
+# Obsidian vault — generated, not source
+vault/
+
+# ChromaDB — vector store
+chroma/
+chromadb/
+
+# API keys & secrets
+.env
+.env.local
+secrets.yaml
+secrets.json
+*.key
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Distribution
+*.tar.gz
+*.zip
+
+# Notebooks (if any)
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+scratch/
