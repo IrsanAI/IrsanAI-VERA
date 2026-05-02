@@ -1,6 +1,11 @@
 """
 IrsanAI-VERA — Veridical Evidence Reasoning Architecture
-Entry point: python vera.py --ontology ontologies/uap.yaml
+v0.3.0 — .env support, Obsidian active, improved agents
+
+Usage:
+  python vera.py --ontology ontologies/uap.yaml
+  python vera.py --ontology ontologies/uap.yaml --cycles 3
+  streamlit run dashboard/app.py
 """
 
 import argparse
@@ -9,50 +14,64 @@ import sys
 from pathlib import Path
 
 
+def _load_env():
+    env_path = Path(".env")
+    if not env_path.exists():
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
 def main():
+    _load_env()
+
     parser = argparse.ArgumentParser(
-        description="IrsanAI-VERA: Veridical Evidence Reasoning Architecture",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python vera.py --ontology ontologies/uap.yaml
-  python vera.py --ontology ontologies/uap.yaml --cycles 3
-  python vera.py --list-ontologies
-        """
+        description="IrsanAI-VERA: Veridical Evidence Reasoning Architecture"
     )
-    parser.add_argument("--ontology", "-o", type=Path, help="Domain ontology YAML")
-    parser.add_argument("--cycles", "-c", type=int, default=1, help="Investigation cycles (default: 1)")
-    parser.add_argument("--vault", type=Path, default=Path("vault"), help="Obsidian vault path")
-    parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Data directory")
-    parser.add_argument("--no-obsidian", action="store_true", help="Skip Obsidian export")
-    parser.add_argument("--github-token", type=str, default=None, help="GitHub API token (optional)")
-    parser.add_argument("--list-ontologies", action="store_true", help="List available ontologies")
-    parser.add_argument("--version", "-v", action="version", version="IrsanAI-VERA 0.2.0")
+    parser.add_argument("--ontology", "-o", type=Path, help="Domain ontology YAML file")
+    parser.add_argument("--cycles", "-c", type=int, default=1)
+    parser.add_argument("--vault", type=Path, default=None)
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--no-obsidian", action="store_true")
+    parser.add_argument("--github-token", type=str, default=None)
+    parser.add_argument("--list-ontologies", action="store_true")
+    parser.add_argument("--version", "-v", action="version", version="IrsanAI-VERA 0.3.0")
 
     args = parser.parse_args()
 
     if args.list_ontologies:
-        files = list(Path("ontologies").glob("*.yaml"))
-        print("\nAvailable ontologies:")
-        for f in files:
+        for f in Path("ontologies").glob("*.yaml"):
             print(f"  {f}")
         sys.exit(0)
 
     if not args.ontology:
         parser.print_help()
-        print("\n⚠️  Specify an ontology: --ontology ontologies/uap.yaml")
+        print("\n⚠️  python vera.py --ontology ontologies/uap.yaml")
         sys.exit(1)
 
     if not args.ontology.exists():
-        print(f"❌ Ontology not found: {args.ontology}")
+        print(f"❌ Not found: {args.ontology}")
         sys.exit(1)
 
+    vault_path = args.vault or Path(os.environ.get("OBSIDIAN_VAULT_PATH", "vault"))
+    github_token = args.github_token or os.environ.get("GITHUB_TOKEN")
+
+    if not github_token:
+        print("ℹ️  No GitHub token. Copy .env.example → .env and add GITHUB_TOKEN\n")
+    else:
+        print("✓  GitHub token loaded\n")
+
     try:
-        import requests
-        import yaml
+        import requests, yaml
     except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
-        print("   Run: pip install requests pyyaml")
+        print(f"❌ pip install requests pyyaml  ({e})")
         sys.exit(1)
 
     from core.ontology_loader import load_ontology
@@ -60,28 +79,22 @@ Examples:
 
     ontology = load_ontology(args.ontology)
 
-    github_token = args.github_token or os.environ.get("GITHUB_TOKEN")
-    if not github_token:
-        print("ℹ️  No GitHub token set. Rate limit: 10 req/min.")
-        print("   Set via: --github-token <token>  or  GITHUB_TOKEN env var\n")
-
-    for cycle_num in range(1, args.cycles + 1):
+    for i in range(1, args.cycles + 1):
         if args.cycles > 1:
-            print(f"\n── Cycle {cycle_num}/{args.cycles} ──")
-
-        cycle = InvestigationCycle(
+            print(f"\n── Cycle {i}/{args.cycles} ──")
+        InvestigationCycle(
             ontology=ontology,
             data_dir=args.data_dir,
-            vault_dir=args.vault,
+            vault_dir=vault_path,
             github_token=github_token,
             skip_obsidian=args.no_obsidian,
-        )
-        cycle.run()
+        ).run()
 
-    print("\n✅ VERA investigation complete.")
+    print("\n✅ VERA complete.")
     if not args.no_obsidian:
-        print(f"   → Open '{args.vault}' in Obsidian to explore the knowledge graph.")
-    print(f"   → Reports saved in '{args.data_dir}'")
+        print(f"   Obsidian vault → '{vault_path}'  (open folder in Obsidian)")
+    print(f"   Reports        → '{args.data_dir}'")
+    print(f"   Dashboard      → streamlit run dashboard/app.py")
 
 
 if __name__ == "__main__":

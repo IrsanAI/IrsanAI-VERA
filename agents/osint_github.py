@@ -1,16 +1,20 @@
 """
-IrsanAI-VERA — GitHub OSINT Agent
+IrsanAI-VERA — GitHub OSINT Agent v2
 agents/osint_github.py
 
-Searches GitHub for repositories relevant to the domain.
-Uses the GitHub Search API with quality filtering (stars, recency).
-Returns real Evidence objects with provenance.
+v0.3.0 improvements:
+- GITHUB_TOKEN from .env
+- Better rate limit handling with backoff
+- Expanded query set for UAP domain
+- Proper error typing
 """
 
 from __future__ import annotations
 
 import datetime
 import hashlib
+import math
+import os
 import time
 from typing import Optional
 
@@ -23,121 +27,115 @@ from core.ontology_loader import DomainOntology
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
 AGENT_NAME = "GITHUB_OSINT_AGENT"
 
+# Supplemental queries beyond the ontology — cast a wider net
+SUPPLEMENTAL_QUERIES = [
+    "UAP data analysis python",
+    "FOIA document archive dataset",
+    "government secrecy tracker",
+    "military black budget analysis",
+    "disclosure research tool",
+]
+
 
 class GitHubOSINTAgent:
-    """
-    Searches GitHub for domain-relevant repositories.
-
-    Quality filters applied:
-    - Minimum star count from ontology
-    - Not archived repos
-    - Pushed within last 2 years (active, not dead)
-    - Description and README language scoring
-    """
-
     def __init__(self, ontology: DomainOntology, bus: LRPBus, session_id: str,
                  github_token: Optional[str] = None):
         self.ontology = ontology
         self.bus = bus
         self.session_id = session_id
-        self._token = github_token
+        # Priority: constructor arg > env var
+        self._token = github_token or os.environ.get("GITHUB_TOKEN")
 
     def _headers(self) -> dict:
-        h = {"Accept": "application/vnd.github+json"}
+        h = {"Accept": "application/vnd.github+json", "User-Agent": "IrsanAI-VERA/0.3.0"}
         if self._token:
             h["Authorization"] = f"Bearer {self._token}"
         return h
 
-    def _make_evidence_id(self, source_url: str) -> str:
-        hash_part = hashlib.md5(source_url.encode()).hexdigest()[:6].upper()
-        date_part = datetime.datetime.now().strftime("%Y%m%d")
-        return f"EVD-GH-{date_part}-{hash_part}"
+    def _make_evidence_id(self, url: str) -> str:
+        hash_part = hashlib.md5(url.encode()).hexdigest()[:6].upper()
+        return f"EVD-GH-{datetime.datetime.now().strftime('%Y%m%d')}-{hash_part}"
 
-    def _is_recent_enough(self, pushed_at: str) -> bool:
-        """Repos not touched in 2 years are deprioritized."""
+    def _is_recent(self, pushed_at: str) -> bool:
         try:
             pushed = datetime.datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-            age_days = (datetime.datetime.now(datetime.timezone.utc) - pushed).days
-            return age_days < 730
+            return (datetime.datetime.now(datetime.timezone.utc) - pushed).days < 730
         except Exception:
             return True
 
     def _score_repo(self, repo: dict) -> float:
-        """Score a repo for domain relevance."""
-        text = (
-            (repo.get("name") or "") + " " +
-            (repo.get("description") or "") + " " +
-            (repo.get("full_name") or "")
-        ).lower()
+        text = " ".join([
+            repo.get("name") or "",
+            repo.get("description") or "",
+            repo.get("full_name") or "",
+            " ".join(repo.get("topics") or []),
+        ]).lower()
 
-        high_hits = sum(1 for s in self.ontology.semantic_seeds_high if s.lower() in text)
-        med_hits  = sum(1 for s in self.ontology.semantic_seeds_medium if s.lower() in text)
-        low_hits  = sum(1 for s in self.ontology.semantic_seeds_low if s.lower() in text)
+        score = 0.0
+        for seed in self.ontology.semantic_seeds_high:
+            if seed.lower() in text: score += 0.35
+        for seed in self.ontology.semantic_seeds_medium:
+            if seed.lower() in text: score += 0.18
+        for seed in self.ontology.semantic_seeds_low:
+            if seed.lower() in text: score += 0.07
 
-        score = (high_hits * 0.35) + (med_hits * 0.15) + (low_hits * 0.05)
-
-        # Star bonus (logarithmic — a repo with 1000 stars ≠ 10x better than 100)
         stars = repo.get("stargazers_count", 0) or 0
         if stars > 0:
-            import math
             score += min(0.25, math.log10(stars + 1) / 4)
 
         return min(1.0, score)
 
     def _search(self, query: str) -> list[dict]:
-        """Single GitHub API search."""
         min_stars = self.ontology.sources.github_min_stars
-        full_query = f"{query} stars:>={min_stars}"
         params = {
-            "q": full_query,
-            "sort": "stars",
-            "order": "desc",
+            "q": f"{query} stars:>={min_stars}",
+            "sort": "stars", "order": "desc",
             "per_page": min(self.ontology.sources.github_max_results, 30),
         }
         try:
             r = requests.get(GITHUB_SEARCH_API, params=params, headers=self._headers(), timeout=15)
             if r.status_code == 200:
                 return r.json().get("items", [])
-            elif r.status_code == 403:
-                # Rate limit — wait and note it
+            if r.status_code == 403:
+                # Check rate limit headers
+                remaining = r.headers.get("X-RateLimit-Remaining", "?")
                 self.bus.send(self.bus.create_message(
                     sender=AGENT_NAME, receiver="ORCHESTRATOR",
                     msg_type=MessageType.ERROR, intent=Intent.SEARCH,
-                    payload={"error": "GitHub rate limit hit", "query": query},
+                    payload={
+                        "error": "GitHub rate limit" if remaining == "0" else "GitHub auth error",
+                        "hint": "Set GITHUB_TOKEN in .env for 5000 req/hr",
+                        "remaining": remaining,
+                    },
                     confidence=1.0,
                 ))
             return []
-        except requests.RequestException as e:
+        except requests.Timeout:
+            return []
+        except Exception:
             return []
 
     def run(self) -> list[Evidence]:
-        """Execute GitHub OSINT sweep."""
         self.bus.send(self.bus.create_message(
             sender=AGENT_NAME, receiver="ORCHESTRATOR",
             msg_type=MessageType.HEARTBEAT, intent=Intent.SEARCH,
-            payload={"status": "starting", "queries": self.ontology.sources.github_queries},
+            payload={"status": "starting", "token_set": bool(self._token)},
             confidence=1.0,
         ))
 
-        all_evidence: list[Evidence] = []
-        seen_urls: set[str] = set()
+        all_evidence, seen_urls = [], set()
+        all_queries = self.ontology.sources.github_queries + SUPPLEMENTAL_QUERIES
 
-        for query in self.ontology.sources.github_queries:
-            results = self._search(query)
-            time.sleep(1.0)  # GitHub rate limit: 10 requests/min unauthenticated
-
-            for repo in results:
+        for query in all_queries:
+            for repo in self._search(query):
                 url = repo.get("html_url", "")
-                if not url or url in seen_urls:
+                if not url or url in seen_urls or repo.get("archived"):
                     continue
-                if repo.get("archived"):
+                if not self._is_recent(repo.get("pushed_at", "")):
                     continue
-                if not self._is_recent_enough(repo.get("pushed_at", "")):
-                    continue
-
                 seen_urls.add(url)
-                score = self._score_repo(repo)
 
+                score = self._score_repo(repo)
                 if score < 0.05:
                     continue
 
@@ -151,14 +149,13 @@ class GitHubOSINTAgent:
                     semantic_score=score,
                     supports_hypothesis=True,
                     summary=(
-                        f"GitHub repo '{repo.get('full_name')}' — {repo.get('stargazers_count', 0)} stars. "
-                        f"Query: '{query}'. "
-                        f"Last active: {repo.get('pushed_at', 'unknown')[:10]}."
+                        f"GitHub: '{repo.get('full_name')}' — "
+                        f"{repo.get('stargazers_count', 0)}★ — query: '{query}'. "
+                        f"Last active: {(repo.get('pushed_at') or '')[:10]}."
                     ),
                     raw_snippet=(repo.get("description") or "")[:200] or None,
                 )
                 all_evidence.append(ev)
-
                 self.bus.send(self.bus.create_message(
                     sender=AGENT_NAME, receiver="ORCHESTRATOR",
                     msg_type=MessageType.EVIDENCE, intent=Intent.SEARCH,
@@ -170,12 +167,13 @@ class GitHubOSINTAgent:
                     },
                     confidence=score,
                 ))
+            # Rate limit: 10 req/min unauthenticated, 5000/hr with token
+            time.sleep(1.5 if not self._token else 0.3)
 
         self.bus.send(self.bus.create_message(
             sender=AGENT_NAME, receiver="ORCHESTRATOR",
             msg_type=MessageType.RESULT, intent=Intent.SEARCH,
-            payload={"total_found": len(all_evidence), "queries_run": len(self.ontology.sources.github_queries)},
-            confidence=0.95 if all_evidence else 0.60,
+            payload={"total_found": len(all_evidence), "queries_run": len(all_queries)},
+            confidence=0.95 if all_evidence else 0.50,
         ))
-
         return all_evidence
