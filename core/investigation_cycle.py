@@ -1,17 +1,12 @@
 """
 IrsanAI-VERA — Investigation Cycle
-core/investigation_cycle.py
+core/investigation_cycle.py  v0.4.0
 
-The main orchestration loop.
-Runs one full investigation cycle:
-  1. Load ontology
-  2. Initialize agents
-  3. Collect evidence (OSINT + Red Team)
-  4. Update Bayesian belief
-  5. Export to Obsidian
-  6. Save session report
-
-Every value in the output traces back to real evidence.
+v0.4.0 additions:
+- EpistemicAuditor integrated — monitors every Bayes update
+- Audit warnings surface in session report and Obsidian export
+- Source type tracking for monoculture detection
+- Health score in final verdict block
 """
 
 from __future__ import annotations
@@ -22,6 +17,7 @@ import time
 import uuid
 from pathlib import Path
 
+from core.auditor import EpistemicAuditor
 from core.bayesian.updater import BayesianBeliefUpdater, Evidence
 from core.lrp_messenger import LRPBus, MessageType, Intent
 from core.ontology_loader import DomainOntology
@@ -31,7 +27,7 @@ from obsidian_writer.exporter import ObsidianExporter
 class InvestigationCycle:
     """
     Orchestrates one full VERA investigation cycle.
-    Domain-agnostic: behavior is entirely driven by the ontology.
+    Domain-agnostic — behavior entirely driven by ontology.
     """
 
     def __init__(
@@ -50,15 +46,21 @@ class InvestigationCycle:
 
         self.data_dir.mkdir(exist_ok=True)
 
-        self.session_id = f"vera_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:4]}"
+        self.session_id = (
+            f"vera_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            f"_{str(uuid.uuid4())[:4]}"
+        )
         self.start_time = time.time()
 
-        # Core components
         self.bus = LRPBus(session_id=self.session_id, data_dir=self.data_dir)
         self.updater = BayesianBeliefUpdater(
             prior=self.ontology.bayesian.prior_tech_coverup,
             hypothesis_name=f"{self.ontology.domain} — Tech Coverup",
             data_dir=self.data_dir,
+        )
+        self.auditor = EpistemicAuditor(
+            data_dir=self.data_dir,
+            session_id=self.session_id,
         )
 
         if not self.skip_obsidian:
@@ -70,7 +72,6 @@ class InvestigationCycle:
             self.exporter = None
 
     def _log(self, phase: str, message: str, confidence: float = 1.0):
-        """Print + LRP log."""
         conf_pct = f"{confidence:.0%}"
         print(f"  [{phase:12s}] {message} ({conf_pct})")
         self.bus.send(self.bus.create_message(
@@ -80,44 +81,42 @@ class InvestigationCycle:
             confidence=confidence,
         ))
 
-    def _collect_evidence(self) -> list[Evidence]:
-        """Run all agents and collect evidence."""
+    def _collect_evidence(self) -> tuple[list[Evidence], list[str]]:
         all_evidence: list[Evidence] = []
         queries_used: list[str] = []
 
-        # --- HuggingFace Agent ---
+        # HuggingFace Agent
         self._log("HF_AGENT", "Starting HuggingFace dataset sweep...", 0.90)
         try:
             from agents.osint_huggingface import HuggingFaceOSINTAgent
-            hf_agent = HuggingFaceOSINTAgent(self.ontology, self.bus, self.session_id)
-            hf_evidence = hf_agent.run()
+            hf_evidence = HuggingFaceOSINTAgent(
+                self.ontology, self.bus, self.session_id
+            ).run()
             all_evidence.extend(hf_evidence)
             queries_used.extend(self.ontology.sources.hf_queries)
             self._log("HF_AGENT", f"Found {len(hf_evidence)} HF evidence pieces", 0.95)
         except Exception as e:
             self._log("HF_AGENT", f"Agent error: {e}", 0.20)
 
-        # --- GitHub Agent ---
+        # GitHub Agent
         self._log("GH_AGENT", "Starting GitHub repository sweep...", 0.90)
         try:
             from agents.osint_github import GitHubOSINTAgent
-            gh_agent = GitHubOSINTAgent(
+            gh_evidence = GitHubOSINTAgent(
                 self.ontology, self.bus, self.session_id,
                 github_token=self.github_token,
-            )
-            gh_evidence = gh_agent.run()
+            ).run()
             all_evidence.extend(gh_evidence)
             queries_used.extend(self.ontology.sources.github_queries)
             self._log("GH_AGENT", f"Found {len(gh_evidence)} GitHub evidence pieces", 0.95)
         except Exception as e:
             self._log("GH_AGENT", f"Agent error: {e}", 0.20)
 
-        # --- Red Team Agent (always runs last) ---
+        # Red Team Agent — always last
         self._log("RED_TEAM", "Starting adversarial counter-evidence sweep...", 0.95)
         try:
             from agents.red_team import RedTeamAgent
-            rt_agent = RedTeamAgent(self.ontology, self.bus, self.session_id)
-            rt_evidence = rt_agent.run()
+            rt_evidence = RedTeamAgent(self.ontology, self.bus, self.session_id).run()
             all_evidence.extend(rt_evidence)
             self._log(
                 "RED_TEAM",
@@ -129,27 +128,49 @@ class InvestigationCycle:
 
         return all_evidence, queries_used
 
-    def _update_beliefs(self, evidence_list: list[Evidence]) -> None:
-        """Feed all evidence through the Bayesian updater."""
-        # Sort: pro-evidence first, then counter-evidence
-        # (order can slightly affect convergence — this is epistemically neutral)
-        sorted_evidence = sorted(evidence_list, key=lambda e: (not e.supports_hypothesis, -e.semantic_score))
+    def _update_beliefs_with_audit(self, evidence_list: list[Evidence]) -> None:
+        """
+        Feed evidence through Bayesian updater and run Epistemic Auditor
+        on each individual update.
+        """
+        # Pro evidence first (epistemically neutral ordering),
+        # then counter evidence. Auditor monitors for drift.
+        sorted_ev = sorted(
+            evidence_list,
+            key=lambda e: (not e.supports_hypothesis, -e.semantic_score)
+        )
 
-        for ev in sorted_evidence:
+        for ev in sorted_ev:
+            prior = self.updater.belief
             self.updater.update(ev)
+            posterior = self.updater.belief
+            lr = ev.likelihood_ratio()
 
-    def _export_obsidian(self, evidence_list: list[Evidence], queries: list[str]) -> None:
-        """Write all findings to the Obsidian vault."""
+            # Audit every single update
+            self.auditor.audit_update(
+                prior=prior,
+                posterior=posterior,
+                likelihood_ratio=lr,
+                evidence_id=ev.id,
+                source_type=ev.source_type,
+                retrieval_method=ev.retrieval_method,
+                supports_hypothesis=ev.supports_hypothesis,
+            )
+
+    def _export_obsidian(
+        self,
+        evidence_list: list[Evidence],
+        queries: list[str],
+        audit_summary: dict,
+    ) -> None:
         if not self.exporter:
             return
 
-        # Evidence notes
         evidence_ids = []
         for ev in evidence_list:
             self.exporter.write_evidence(ev.to_obsidian_note(), ev.id)
             evidence_ids.append(ev.id)
 
-        # Entity notes
         for entity in self.ontology.entities:
             related = [
                 ev.id for ev in evidence_list
@@ -161,7 +182,6 @@ class InvestigationCycle:
                 related,
             )
 
-        # Session summary
         verdict = self.ontology.get_verdict(self.updater.belief)
         duration = time.time() - self.start_time
         self.exporter.write_session_summary(
@@ -171,9 +191,9 @@ class InvestigationCycle:
             evidence_ids=evidence_ids,
             queries_used=list(set(queries)),
             duration_seconds=duration,
+            audit_section=self.auditor.to_obsidian_section(),
         )
 
-        # Update vault index
         self.exporter.update_index(
             belief_summary=self.updater.summary(),
             verdict={"label": verdict.label},
@@ -181,8 +201,12 @@ class InvestigationCycle:
             if (self.vault_dir / "sessions").exists() else 1,
         )
 
-    def _save_report(self, evidence_list: list[Evidence], queries: list[str]) -> Path:
-        """Save a complete JSON session report."""
+    def _save_report(
+        self,
+        evidence_list: list[Evidence],
+        queries: list[str],
+        audit_summary: dict,
+    ) -> Path:
         verdict = self.ontology.get_verdict(self.updater.belief)
         report = {
             "session_id": self.session_id,
@@ -196,6 +220,7 @@ class InvestigationCycle:
             "counter_evidence": [e.to_dict() for e in evidence_list if not e.supports_hypothesis],
             "queries_used": list(set(queries)),
             "lrp_messages_sent": self.bus.total_messages,
+            "epistemic_audit": audit_summary,  # NEW in v0.4.0
         }
         report_path = self.data_dir / f"{self.session_id}_report.json"
         with open(report_path, "w", encoding="utf-8") as f:
@@ -203,12 +228,8 @@ class InvestigationCycle:
         return report_path
 
     def run(self) -> dict:
-        """
-        Execute one full investigation cycle.
-        Returns the final summary dict.
-        """
         print(f"\n{'='*65}")
-        print(f"  IrsanAI-VERA — {self.ontology.domain}")
+        print(f"  IrsanAI-VERA v0.4.0 — {self.ontology.domain}")
         print(f"  Session: {self.session_id}")
         print(f"  Prior belief: {self.updater.belief:.1%}")
         print(f"{'='*65}\n")
@@ -217,37 +238,67 @@ class InvestigationCycle:
         self._log("ORCHESTRATOR", "Dispatching agents...", 1.0)
         evidence_list, queries = self._collect_evidence()
 
-        # 2. Check minimum evidence threshold
+        # 2. Check minimum threshold
         if len(evidence_list) < self.ontology.bayesian.min_evidence_for_update:
             self._log(
                 "ORCHESTRATOR",
-                f"Insufficient evidence ({len(evidence_list)} < {self.ontology.bayesian.min_evidence_for_update}). "
-                "Belief not updated.",
+                f"Insufficient evidence ({len(evidence_list)} < "
+                f"{self.ontology.bayesian.min_evidence_for_update}). Belief not updated.",
                 0.50,
             )
         else:
-            # 3. Update beliefs
-            self._log("BAYES", f"Updating belief from {len(evidence_list)} evidence pieces...", 0.95)
-            self._update_beliefs(evidence_list)
+            # 3. Bayesian updates with live audit
+            self._log(
+                "BAYES",
+                f"Updating belief from {len(evidence_list)} evidence pieces...",
+                0.95,
+            )
+            self._update_beliefs_with_audit(evidence_list)
 
-        # 4. Final verdict
+        # 4. Session-end audit
+        self._log("AUDITOR", "Running epistemic health check...", 1.0)
+        source_types = [ev.retrieval_method for ev in evidence_list]
+        pro_count = sum(1 for e in evidence_list if e.supports_hypothesis)
+        counter_count = len(evidence_list) - pro_count
+
+        end_warnings = self.auditor.audit_session_end(
+            total_pro=pro_count,
+            total_counter=counter_count,
+            source_types=source_types,
+            final_belief=self.updater.belief,
+            total_updates=len(evidence_list),
+        )
+        audit_summary = self.auditor.session_summary()
+
+        # 5. Print verdict
         verdict = self.ontology.get_verdict(self.updater.belief)
-        summary = self.updater.summary()
+        bs = self.updater.summary()
+        health = audit_summary["health_score"]
+        health_icon = "🟢" if health > 0.8 else "🟡" if health > 0.5 else "🔴"
 
         print(f"\n{'='*65}")
-        print(f"  VERDICT: {verdict.label}")
-        print(f"  Belief:  {summary['current_belief']:.1%}  (started at {summary['prior']:.1%})")
-        print(f"  Evidence: {summary['pro_evidence']} pro / {summary['counter_evidence']} counter")
+        print(f"  VERDICT:  {verdict.label}")
+        print(f"  Belief:   {bs['current_belief']:.1%}  (prior: {bs['prior']:.1%})")
+        print(f"  Evidence: {bs['pro_evidence']} pro / {bs['counter_evidence']} counter")
+        print(f"  Health:   {health_icon} {health:.3f}/1.000  ({audit_summary['total_warnings']} warnings)")
         print(f"{'='*65}\n")
 
-        # 5. Export to Obsidian
+        if audit_summary["total_warnings"] > 0:
+            self._log(
+                "AUDITOR",
+                f"{audit_summary['total_warnings']} epistemic warning(s): "
+                + str(dict(audit_summary["by_severity"])),
+                0.95,
+            )
+
+        # 6. Obsidian export
         if self.exporter:
             self._log("OBSIDIAN", "Exporting to Obsidian vault...", 0.90)
-            self._export_obsidian(evidence_list, queries)
-            self._log("OBSIDIAN", f"Vault updated at: {self.vault_dir.absolute()}", 1.0)
+            self._export_obsidian(evidence_list, queries, audit_summary)
+            self._log("OBSIDIAN", f"Vault: {self.vault_dir.absolute()}", 1.0)
 
-        # 6. Save JSON report
-        report_path = self._save_report(evidence_list, queries)
-        self._log("SAVE", f"Report saved: {report_path}", 1.0)
+        # 7. Save report
+        report_path = self._save_report(evidence_list, queries, audit_summary)
+        self._log("SAVE", f"Report: {report_path}", 1.0)
 
-        return summary
+        return bs

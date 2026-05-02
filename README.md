@@ -202,17 +202,20 @@ VERA uses **IrsanAI-LRP v1.3** as the inter-agent communication protocol. All ag
 
 ## Project Status
 
-| Component | Status |
-|-----------|--------|
-| Project skeleton | ✅ Complete |
-| Ontology loader | 🔨 In development |
-| Bayesian core | 🔨 In development |
-| OSINT agents | 🔨 In development |
-| Red Team Agent | 📋 Planned |
-| ChromaDB memory | 📋 Planned |
-| Obsidian exporter | 📋 Planned |
-| LRP integration | 📋 Planned |
-| Dashboard | 📋 Planned |
+| Component | Status | Note |
+|-----------|--------|------|
+| Project skeleton | ✅ Complete | Modular, domain-agnostic |
+| Ontology loader | ✅ Complete | YAML-driven domain switching |
+| Bayesian core | ✅ Complete | True Bayes updates, provenance chain |
+| OSINT agents (HF + GitHub) | ✅ Complete | Real API integration, funnel strategy |
+| Red Team Agent | ✅ Complete | Adversarial counter-evidence, belief reduction |
+| Obsidian exporter | ✅ Complete | Auto-generated knowledge vault |
+| LRP v1.3 protocol | ✅ Complete | Inter-agent structured messaging |
+| Dashboard (Streamlit) | ✅ Complete | Belief evolution, Bayes trail, evidence explorer |
+| **Epistemic Auditor** | ✅ Complete | Health score, bias detection, 7 warning types |
+| ChromaDB cross-session memory | 📋 Planned | v0.5.0 |
+| NLP sentence-transformer scoring | 📋 Planned | v0.5.0 |
+| NetworkX knowledge graph | 📋 Planned | v0.5.0 |
 
 ---
 

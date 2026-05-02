@@ -65,6 +65,7 @@ created: {datetime.datetime.now().isoformat()}
         evidence_ids: list[str],
         queries_used: list[str],
         duration_seconds: float,
+        audit_section: str = "",
     ):
         """Write a session summary note — the daily investigation log."""
         date_str = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -103,6 +104,8 @@ verdict: {verdict.get('label', 'N/A')}
 | Counter-evidence | {belief_summary.get('counter_evidence', 0)} |
 | Net shift | {belief_summary.get('net_shift', 0):+.4f} |
 | Duration | {duration_seconds:.1f}s |
+
+{audit_section}
 
 ## Session ID
 `{session_id}`

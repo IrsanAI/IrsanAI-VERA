@@ -73,7 +73,7 @@ def load_belief_updates(data_dir: str = "data") -> pd.DataFrame:
 # ---- Sidebar ----
 with st.sidebar:
     st.image("https://raw.githubusercontent.com/IrsanAI/IrsanAI-VERA/main/docs/vera_logo.png",
-             use_column_width=True, caption="IrsanAI-VERA")
+             width="stretch", caption="IrsanAI-VERA")
     st.markdown("---")
     data_dir = st.text_input("Data directory", value="data")
     st.markdown("---")
@@ -158,7 +158,7 @@ if len(reports) > 1:
         annotation_text=f"Prior ({bs.get('prior', 0.1):.0%})",
         annotation_position="bottom right",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ---- Bayesian update steps ----
 if not belief_df.empty:
@@ -187,7 +187,7 @@ if not belief_df.empty:
         height=280,
         legend=dict(orientation="h"),
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
     display_df = belief_df[["timestamp", "evidence_id", "prior", "likelihood_ratio", "posterior", "delta", "supports_hypothesis"]].copy()
     display_df["prior"] = display_df["prior"].map("{:.2%}".format)
@@ -196,7 +196,7 @@ if not belief_df.empty:
     display_df["likelihood_ratio"] = display_df["likelihood_ratio"].map("{:.4f}".format)
     display_df["direction"] = display_df["supports_hypothesis"].map({True: "✅ Pro", False: "❌ Counter"})
     display_df = display_df.drop(columns=["supports_hypothesis"])
-    st.dataframe(display_df, use_container_width=True, height=250)
+    st.dataframe(display_df, width="stretch", height=250)
 
 st.markdown("---")
 
@@ -229,7 +229,7 @@ if all_evidence:
     display_cols = [c for c in display_cols if c in filtered.columns]
     st.dataframe(
         filtered[display_cols].rename(columns={"_direction": "direction", "id": "evidence_id"}),
-        use_container_width=True,
+        width="stretch",
         height=300,
     )
 else:
