@@ -1,0 +1,1 @@
+# IrsanAI-VERA core package

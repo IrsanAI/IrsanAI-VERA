@@ -40,24 +40,29 @@ class Evidence:
         Bayes factor for this piece of evidence.
         P(Evidence | H is true) / P(Evidence | H is false)
 
-        High trust + high semantic score + corroboration = strong update.
-        Counter-evidence (Red Team) returns inverse ratio.
+        Pro-evidence  → LR > 1.0 (raises belief)
+        Counter-evidence → LR < 1.0 (lowers belief)
+
+        Formula:
+          strength = trust_weight * semantic_score * 3.0  (max = 3.0)
+          pro:     LR = 1 + strength  →  range [1.0, 4.0]
+          counter: LR = 1 / (1 + strength)  →  range [0.25, 1.0]
         """
-        base_lr = self.source_trust_weight * self.semantic_score
-        corroboration_bonus = 1.0 + (len(self.corroborated_by) * 0.15)
-        lr = base_lr * corroboration_bonus
+        strength = self.source_trust_weight * self.semantic_score * 3.0
+        corroboration_bonus = len(self.corroborated_by) * 0.20
+        strength = min(strength + corroboration_bonus, 5.0)
 
         # Age decay: evidence older than 90 days loses weight
         retrieved = datetime.datetime.fromisoformat(self.retrieved_at)
         age_days = (datetime.datetime.now() - retrieved).days
         if age_days > 90:
-            lr *= max(0.3, 1.0 - ((age_days - 90) / 365))
+            decay = max(0.3, 1.0 - ((age_days - 90) / 365))
+            strength *= decay
 
-        if not self.supports_hypothesis:
-            # Counter-evidence: invert the ratio
-            return 1.0 / max(lr, 0.01)
-
-        return max(lr, 0.01)
+        if self.supports_hypothesis:
+            return 1.0 + strength   # > 1.0: raises belief
+        else:
+            return 1.0 / (1.0 + strength)  # < 1.0: lowers belief
 
     def to_dict(self) -> dict:
         return asdict(self)
