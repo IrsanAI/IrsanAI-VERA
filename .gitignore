@@ -2,7 +2,14 @@
 # IrsanAI-VERA .gitignore
 # ========================
 
-# Python
+# ── PREFLIGHT SYSTEM — NIEMALS COMMITTEN ────────────────────────
+irsanai_preflight.py
+irsanai_preflight_*.md
+preflight_*.md
+*_preflight_*.md
+.preflight/
+
+# ── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,37 +26,36 @@ env/
 venv/
 ENV/
 
-# PyCharm
+# ── PyCharm ─────────────────────────────────────────────────────
 .idea/
 *.iml
 *.iws
-.idea_modules/
 
-# Data — never commit raw investigation data
+# ── Data — niemals rohe Untersuchungsdaten committen ────────────
 data/
 *.jsonl
 *.db
 *.sqlite
 *.sqlite3
 
-# Reports — generated output
+# ── Reports ─────────────────────────────────────────────────────
 AA_Reports/
 reports/
 *_FINAL.json
 *_FINAL_REPORT.json
 *.log
 
-# Hardware report — contains local system info
+# ── Hardware report ──────────────────────────────────────────────
 IrsanAI_HW_Report.json
 
-# Obsidian vault — generated, not source
+# ── Obsidian vault ───────────────────────────────────────────────
 vault/
 
-# ChromaDB — vector store
+# ── ChromaDB ─────────────────────────────────────────────────────
 chroma/
 chromadb/
 
-# API keys & secrets
+# ── Secrets ──────────────────────────────────────────────────────
 .env
 .env.local
 secrets.yaml
@@ -57,28 +63,26 @@ secrets.json
 *.key
 *.pem
 
-# OS
+# ── OS ───────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Coverage
+# ── Coverage / Tests ─────────────────────────────────────────────
 .coverage
 htmlcov/
 .pytest_cache/
 
-# Distribution
+# ── Distribution ─────────────────────────────────────────────────
 *.tar.gz
 *.zip
 
-# Notebooks (if any)
+# ── Notebooks ────────────────────────────────────────────────────
 .ipynb_checkpoints/
 
-# Logs
-*.log
-logs/
-
-# Temporary
+# ── Temp ─────────────────────────────────────────────────────────
 tmp/
 temp/
 scratch/
+logs/
+git status
