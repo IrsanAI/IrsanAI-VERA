@@ -9,6 +9,9 @@ preflight_*.md
 *_preflight_*.md
 .preflight/
 
+#PatchBot
+irsanai_patchbot.py
+
 # ── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

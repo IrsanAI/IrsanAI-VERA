@@ -1,0 +1,8 @@
+VERA_PATCH v1
+---
+FILE: ontologies/uap.yaml
+ACTION: REPLACE
+FIND: min_stars: 3
+WITH:     min_stars: 3
+REASON: YAML Einrueckungsfehler behoben - min_stars muss 4 Leerzeichen Einrueckung haben um unter github: zu stehen.
+---

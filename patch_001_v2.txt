@@ -1,0 +1,18 @@
+VERA_PATCH v1
+---
+FILE: agents/osint_github.py
+ACTION: REPLACE_LINE
+LINE_CONTAINS: "disclosure research tool"
+WITH:     "UAP unidentified aerial phenomena data",
+    "AARO anomaly report analysis tool",
+    "government UFO documents dataset",
+    "FOIA military declassified archive",
+    "non-human intelligence evidence",
+REASON: Generischer Query traf Cybersecurity-Repos (CVE, Bug Bounty) statt UAP. Ersetzt durch 5 praezise UAP-Queries.
+---
+FILE: ontologies/uap.yaml
+ACTION: REPLACE_LINE
+LINE_CONTAINS: "min_stars: 5"
+WITH:     min_stars: 3
+REASON: Threshold von 5 auf 3 reduziert - filterte relevante kleinere UAP-Repos raus.
+---

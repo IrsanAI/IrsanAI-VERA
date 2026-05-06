@@ -1,0 +1,30 @@
+VERA_PATCH v1
+---
+FILE: dashboard/app.py
+ACTION: REPLACE
+FIND:         mean_lr = audit.get("mean_lr")
+        lr_std  = audit.get("lr_std")
+        max_shift = audit.get("max_single_shift")
+        if mean_lr:
+            st.markdown(f"""
+        <div style="font-family:JetBrains Mono;font-size:0.62rem;line-height:2.2;color:#4a7a9b">
+          MEAN LR &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{mean_lr:.4f}</span><br>
+          LR STD &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{lr_std:.4f if lr_std else '—'}</span><br>
+          MAX SHIFT &nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{max_shift:.4f if max_shift else '—'}</span>
+        </div>
+        """, unsafe_allow_html=True)
+WITH:         mean_lr = audit.get("mean_lr")
+        lr_std  = audit.get("lr_std")
+        max_shift = audit.get("max_single_shift")
+        if mean_lr:
+            lr_std_str = f"{lr_std:.4f}" if lr_std else "—"
+            max_shift_str = f"{max_shift:.4f}" if max_shift else "—"
+            st.markdown(f"""
+        <div style="font-family:JetBrains Mono;font-size:0.62rem;line-height:2.2;color:#4a7a9b">
+          MEAN LR &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{mean_lr:.4f}</span><br>
+          LR STD &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{lr_std_str}</span><br>
+          MAX SHIFT &nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{max_shift_str}</span>
+        </div>
+        """, unsafe_allow_html=True)
+REASON: F-String darf keinen Conditional innerhalb des Format-Specifiers haben. Werte vorab berechnet.
+---

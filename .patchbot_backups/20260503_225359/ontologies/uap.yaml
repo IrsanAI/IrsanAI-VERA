@@ -90,7 +90,7 @@ sources:
       - "AARO anomaly report analysis"
       - "declassified UAP data"
     max_results: 20
-    min_stars: 3
+    min_stars: 5  # Filter low-quality repos
 
   huggingface:
     queries:

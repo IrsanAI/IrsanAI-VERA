@@ -1,0 +1,11 @@
+VERA_PATCH v1
+---
+FILE: .gitignore
+ACTION: REPLACE
+FIND: irsanai_preflight.py
+WITH: irsanai_preflight.py
+irsanai_patchbot.py
+patch_*.txt
+.patchbot_backups/
+REASON: PatchBot-Files und Backups niemals auf GitHub — lokal only.
+---

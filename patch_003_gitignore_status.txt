@@ -1,0 +1,10 @@
+VERA_PATCH v1
+---
+FILE: .gitignore
+ACTION: REPLACE_LINE
+LINE_CONTAINS: irsanai_patchbot.py
+WITH: irsanai_patchbot.py
+irsanai_patchbot_status.py
+patchbot_status_*.md
+REASON: Status-Reporter und seine Outputs ebenfalls lokal halten - niemals auf GitHub.
+---
