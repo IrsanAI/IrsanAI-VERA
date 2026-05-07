@@ -136,7 +136,7 @@ class GitHubOSINTAgent:
                 seen_urls.add(url)
 
                 score = self._score_repo(repo)
-                if score < 0.02:
+                if score < 0.05:
                     continue
 
                 ev = Evidence(

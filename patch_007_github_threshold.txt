@@ -1,0 +1,8 @@
+VERA_PATCH v1
+---
+FILE: agents/osint_github.py
+ACTION: REPLACE_LINE
+LINE_CONTAINS: if score < 0.05:
+WITH:                 if score < 0.02:
+REASON: Score-Schwelle von 0.05 auf 0.02 gesenkt - UAP-Repos werden gefunden aber wegen zu striktem Threshold gefiltert. Stars-Bonus allein reicht bereits fuer 0.02+.
+---
