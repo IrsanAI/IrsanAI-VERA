@@ -1,0 +1,52 @@
+VERA_PATCH v1
+---
+FILE: dashboard/app.py
+ACTION: REPLACE
+FIND: st.markdown(f"""
+<div style="font-family:JetBrains Mono;font-size:0.5rem;color:#0d2030;
+            text-align:center;padding:1rem 0;letter-spacing:0.2em">
+  IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; EPISTEMIC OPERATIONS CENTER &nbsp;·&nbsp;
+  {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now}
+</div>
+""", unsafe_allow_html=True)
+WITH: # ── Resonance Reporter Button ──
+rc1, rc2, rc3 = st.columns([2, 1, 1])
+with rc2:
+    if st.button("⬡ Resonance Report", use_container_width=True, help="Generate IST/SOLL report for Claude"):
+        import subprocess, sys
+        result = subprocess.run(
+            [sys.executable, "irsanai_resonance_reporter.py"],
+            capture_output=True, text=True, cwd=Path(".")
+        )
+        if result.returncode == 0:
+            st.success("Report generated — check project root for resonance_report_*.md")
+        else:
+            st.error(f"Error: {result.stderr[:200]}")
+with rc3:
+    st.markdown(
+        f'<a href="https://github.com/IrsanAI/IrsanAI-VERA" target="_blank" '
+        f'style="font-family:JetBrains Mono;font-size:0.6rem;color:#00ffc8;'
+        f'text-decoration:none;border:1px solid #00ffc8;padding:4px 12px;">'
+        f'⬡ GitHub</a>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown(f"""
+<div style="font-family:JetBrains Mono;font-size:0.5rem;color:#0d2030;
+            text-align:center;padding:1rem 0;letter-spacing:0.2em">
+  IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; EPISTEMIC OPERATIONS CENTER &nbsp;·&nbsp;
+  {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now} &nbsp;·&nbsp;
+  <a href="https://github.com/IrsanAI/IrsanAI-VERA" style="color:#0d2030">github.com/IrsanAI/IrsanAI-VERA</a>
+</div>
+""", unsafe_allow_html=True)
+REASON: GitHub link im Dashboard verankert (immer sichtbar). Resonance Reporter Button erzeugt IST/SOLL Report on demand.
+---
+FILE: .gitignore
+ACTION: REPLACE_LINE
+LINE_CONTAINS: irsanai_patchbot_status.py
+WITH: irsanai_patchbot_status.py
+irsanai_resonance_reporter.py
+resonance_report_*.md
+auto_repair_*.txt
+REASON: Resonance Reporter und seine Outputs lokal halten - niemals auf GitHub.
+---
