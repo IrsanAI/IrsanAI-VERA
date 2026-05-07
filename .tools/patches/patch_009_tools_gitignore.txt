@@ -1,0 +1,11 @@
+VERA_PATCH v1
+---
+FILE: .gitignore
+ACTION: APPEND
+WITH:
+
+# ── Local Toolchain (never on GitHub) ────────────────────────────
+.tools/
+vera_organize.py
+REASON: .tools/ Ordner und vera_organize.py aus Git raushalten. Alle lokalen Tools sind jetzt dort drin.
+---
