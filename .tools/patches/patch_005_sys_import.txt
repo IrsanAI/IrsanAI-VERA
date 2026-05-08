@@ -1,9 +1,0 @@
-VERA_PATCH v1
----
-FILE: dashboard/app.py
-ACTION: REPLACE_LINE
-LINE_CONTAINS: import streamlit as st
-WITH: import sys
-import streamlit as st
-REASON: sys fehlte in dashboard/app.py - wird benoetigt fuer den Resonance Reporter Button (subprocess.run mit sys.executable).
----

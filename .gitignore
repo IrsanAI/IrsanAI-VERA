@@ -48,6 +48,9 @@ reports/
 *_FINAL_REPORT.json
 *.log
 
+# ── Tools ────────────────────────────────────────────────────────
+.tools/
+
 # ── Hardware report ──────────────────────────────────────────────
 IrsanAI_HW_Report.json
 
