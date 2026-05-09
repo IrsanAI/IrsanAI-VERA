@@ -86,11 +86,13 @@ semantic_seeds:
 sources:
   github:
     queries:
-      - "UAP FOIA government disclosure"
-      - "AARO anomaly report analysis"
-      - "declassified UAP data"
+      - "UFO disclosure archive"
+      - "UAP unidentified aerial phenomena"
+      - "FOIA declassified documents"
+      - "UAP data analysis"
+      - "government UFO investigation"
     max_results: 20
-    min_stars: 3
+    min_stars: 0
 
   huggingface:
     queries:

@@ -25,11 +25,11 @@ GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
 AGENT_NAME = "GITHUB_OSINT_AGENT"
 
 SUPPLEMENTAL_QUERIES = [
-    "UAP unidentified aerial phenomena data",
-    "AARO anomaly report analysis tool",
-    "government UFO documents dataset",
-    "FOIA military declassified archive",
-    "non-human intelligence evidence",
+    "UFO sighting database",
+    "UAP evidence research",
+    "FOIA government secrets",
+    "alien disclosure project",
+    "UAP sensor anomaly",
 ]
 
 
