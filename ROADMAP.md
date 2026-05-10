@@ -1,56 +1,66 @@
 # IrsanAI-VERA — Roadmap
 
-## v0.1.0 — Foundation (current)
+This roadmap defines feature evolution.
+All items are subject to VERA_MANIFEST governance rules.
+
+------------------------------------------------------------
+
+## v0.1.0 — Foundation (Completed)
+
 - [x] Project skeleton & folder structure
-- [x] Domain ontology YAML format (UAP example)
+- [x] Domain ontology YAML format
 - [x] Bayesian Belief Updater with provenance chain
 - [x] Evidence dataclass with likelihood ratios
 - [x] Obsidian vault exporter
 - [x] pyproject.toml, .gitignore, README
-- [ ] Ontology loader (reads YAML → config)
-- [ ] LRP v1.3 inter-agent message format
 
-## v0.2.0 — Real Data
-- [ ] HuggingFace agent (semantic search, not keyword)
-- [ ] GitHub OSINT agent (real API, repo quality filtering)
-- [ ] RSS news crawler (trust-weighted sources from ontology)
-- [ ] ChromaDB integration (cross-session vector memory)
-- [ ] First real investigation cycle with honest probabilities
+------------------------------------------------------------
+
+## v0.2.0 — Real Data Integration
+
+- [ ] Ontology loader (YAML → config)
+- [ ] HuggingFace semantic agent
+- [ ] GitHub OSINT agent (quality filtering)
+- [ ] RSS trust-weighted crawler
+- [ ] ChromaDB integration
+- [ ] First full investigation cycle
+
+(Requires D stability compliance)
+
+------------------------------------------------------------
 
 ## v0.3.0 — Adversarial Layer
-- [ ] Red Team Agent (counter-evidence seeker)
-- [ ] Adversarial synthesis: Pro vs Counter → Bayesian verdict
+
+- [ ] Red Team Agent
+- [ ] Pro vs Counter Bayesian synthesis
 - [ ] Claim-Evidence dependency graph (NetworkX)
-- [ ] Obsidian entity notes auto-generated from graph
+- [ ] Automatic graph-based Obsidian notes
+
+------------------------------------------------------------
 
 ## v0.4.0 — Intelligence Layer
-- [ ] Sentence-transformer NLP signal processor
-- [ ] Cross-session memory (ChromaDB) with similarity search
-- [ ] Autopilot: RL strategy selector based on historical signal yield
-- [ ] LRP v1.3 inter-agent communication protocol
 
-## v0.5.0 — Interface
-- [ ] FastAPI backend (replaces Streamlit for production)
-- [ ] Real-time WebSocket updates to dashboard
-- [ ] Streamlit dashboard (current reports + belief timeline)
-- [ ] CLI improvements: `vera run`, `vera status`, `vera export`
+- [ ] Sentence-transformer semantic scoring
+- [ ] Cross-session memory
+- [ ] Strategy selection (Autopilot)
+- [ ] LRP v1.3 communication protocol
 
-## v1.0.0 — Production
-- [ ] Docker container + docker-compose
-- [ ] Scheduled runs (system service or cron)
-- [ ] Multi-domain support (run multiple ontologies)
+------------------------------------------------------------
+
+## v0.5.0 — Interface Evolution
+
+- [ ] FastAPI backend
+- [ ] WebSocket real-time updates
+- [ ] Enhanced dashboard
+- [ ] CLI improvements
+
+------------------------------------------------------------
+
+## v1.0.0 — Production Readiness
+
+- [ ] Dockerized deployment
+- [ ] Scheduled execution
+- [ ] Multi-ontology support
 - [ ] Full documentation
-- [ ] Unit tests for Bayesian core
-
-## Domain Ontologies Planned
-- `uap.yaml` — UAP/Disclosure (proof-of-concept)
-- `pharma_fraud.yaml` — Drug efficacy misrepresentation
-- `financial_crime.yaml` — Structured financial anomaly detection
-- `climate_data.yaml` — Multi-source climate sensor synthesis
-- `academic_fraud.yaml` — Scientific misconduct pattern detection
-
-## Legacy
-The `legacy/` folder contains prototype versions v1.0–v1.6 from the initial
-development session. These are archived for historical context.
-Their core limitation: probability values were hardcoded, not evidence-derived.
-VERA fixes this at the architectural level.
+- [ ] Extended test suite
+- [ ] Public release tag
