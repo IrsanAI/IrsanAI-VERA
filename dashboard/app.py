@@ -1,22 +1,26 @@
 """
-IrsanAI-VERA — Epistemic Operations Center v2.0
+IrsanAI-VERA — Epistemic Operations Center v3.0
 dashboard/app.py
 
-Run: streamlit run dashboard/app.py
+v3.0 additions:
+- Live Obsidian Knowledge Graph view (NetworkX + Plotly)
+- Graph stats: nodes, edges, components, most connected
+- Integrated with existing dark-mode design
 """
-import sys
-import streamlit as st
+
 import json
 import glob
-import datetime
-from pathlib import Path
-
 import sys
+import datetime
+import networkx as nx
+from pathlib import Path
+from collections import defaultdict
+
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 
-# ── Page Config ─────────────────────────────────────────────────
+# ── Page Config ──────────────────────────────────────────────────
 st.set_page_config(
     page_title="VERA // Epistemic Ops",
     page_icon="⬡",
@@ -24,280 +28,249 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Inject CSS ──────────────────────────────────────────────────
+# ── CSS ──────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
-
-/* ── Global Reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; }
-
-html, body, [data-testid="stAppViewContainer"] {
-    background: #030608 !important;
-    color: #c8d8e8 !important;
-    font-family: 'JetBrains Mono', monospace !important;
-}
-
-[data-testid="stAppViewContainer"] {
-    background:
-        radial-gradient(ellipse 80% 50% at 20% 10%, rgba(0,255,200,0.04) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(255,60,60,0.03) 0%, transparent 60%),
-        #030608 !important;
-}
-
-[data-testid="stHeader"] { background: transparent !important; }
-[data-testid="stSidebar"] { background: #050a0f !important; border-right: 1px solid #0d2030; }
-
-/* ── Typography ── */
-h1, h2, h3 { font-family: 'Bebas Neue', sans-serif !important; letter-spacing: 0.08em; }
-
-/* ── Streamlit Elements ── */
-.stMetric { background: transparent !important; }
-[data-testid="stMetricValue"] {
-    font-family: 'Bebas Neue', sans-serif !important;
-    font-size: 2.4rem !important;
-    color: #00ffc8 !important;
-}
-[data-testid="stMetricLabel"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 0.6rem !important;
-    letter-spacing: 0.15em !important;
-    color: #4a7a9b !important;
-    text-transform: uppercase !important;
-}
-[data-testid="stMetricDelta"] { font-size: 0.7rem !important; }
-
-div[data-testid="stDataFrame"] {
-    border: 1px solid #0d2030 !important;
-    border-radius: 2px !important;
-}
-
-/* ── Divider ── */
-hr { border-color: #0d2030 !important; }
-
-/* Plotly containers */
-.js-plotly-plot { border-radius: 2px; }
-
-/* ── Custom Components ── */
-.vera-header {
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 1.5rem 0 0.5rem;
-    border-bottom: 1px solid #0d2030;
-    margin-bottom: 1.5rem;
-}
-.vera-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.8rem;
-    letter-spacing: 0.15em;
-    color: #e8f4ff;
-    line-height: 1;
-}
-.vera-subtitle {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    color: #2a5a7a;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-}
-.vera-badge {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.55rem;
-    padding: 2px 8px;
-    border: 1px solid #00ffc8;
-    color: #00ffc8;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-left: auto;
-}
-.verdict-panel {
-    padding: 1rem 1.2rem;
-    border-left: 3px solid #00ffc8;
-    background: rgba(0,255,200,0.03);
-    margin: 0.5rem 0 1.5rem;
-    font-family: 'JetBrains Mono', monospace;
-}
-.verdict-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.4rem;
-    letter-spacing: 0.1em;
-    color: #e8f4ff;
-}
-.verdict-meta {
-    font-size: 0.6rem;
-    color: #2a5a7a;
-    letter-spacing: 0.1em;
-    margin-top: 0.3rem;
-}
-.section-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.58rem;
-    letter-spacing: 0.25em;
-    color: #2a5a7a;
-    text-transform: uppercase;
-    border-bottom: 1px solid #0d2030;
-    padding-bottom: 0.4rem;
-    margin-bottom: 1rem;
-}
-.audit-warn {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    padding: 0.5rem 0.8rem;
-    margin: 0.3rem 0;
-    border-left: 2px solid;
-}
-.warn-low    { border-color: #4a9a7a; background: rgba(74,154,122,0.06); color: #6abf9a; }
-.warn-medium { border-color: #c87020; background: rgba(200,112,32,0.06); color: #e89040; }
-.warn-high   { border-color: #c03030; background: rgba(192,48,48,0.06);  color: #e05050; }
-.warn-critical { border-color: #ff2050; background: rgba(255,32,80,0.08); color: #ff4070; animation: pulse 2s infinite; }
-@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
-
-.health-bar-wrap {
-    background: #0d1820;
-    height: 4px;
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 0.5rem;
-}
-.health-bar {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 1s ease;
-}
-.ev-item {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #0d1820;
-    font-size: 0.65rem;
-    display: flex;
-    gap: 0.8rem;
-    align-items: flex-start;
-}
-.ev-pro    { color: #00ffc8; }
-.ev-counter { color: #ff5050; }
-.ev-id { color: #2a5a7a; font-size: 0.55rem; white-space: nowrap; }
-.ev-text { color: #8ab0c8; flex: 1; line-height: 1.4; }
-
-.no-data {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    color: #2a5a7a;
-    padding: 2rem;
-    text-align: center;
-    border: 1px dashed #0d2030;
-    letter-spacing: 0.1em;
-}
-.scanline {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.03) 2px,
-        rgba(0,0,0,0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 9999;
-}
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Bebas+Neue&display=swap');
+html,body,[data-testid="stAppViewContainer"]{background:#030608!important;color:#c8d8e8!important;font-family:'JetBrains Mono',monospace!important}
+[data-testid="stAppViewContainer"]{background:radial-gradient(ellipse 80% 50% at 20% 10%,rgba(0,255,200,.04) 0%,transparent 60%),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(255,60,60,.03) 0%,transparent 60%),#030608!important}
+[data-testid="stHeader"]{background:transparent!important}
+h1,h2,h3{font-family:'Bebas Neue',sans-serif!important;letter-spacing:.08em}
+[data-testid="stMetricValue"]{font-family:'Bebas Neue',sans-serif!important;font-size:2.2rem!important;color:#00ffc8!important}
+[data-testid="stMetricLabel"]{font-family:'JetBrains Mono',monospace!important;font-size:.58rem!important;letter-spacing:.15em!important;color:#4a7a9b!important;text-transform:uppercase!important}
+hr{border-color:#0d2030!important}
+.vera-header{display:flex;align-items:baseline;gap:1rem;padding:1.5rem 0 .5rem;border-bottom:1px solid #0d2030;margin-bottom:1.5rem}
+.vera-title{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:.15em;color:#e8f4ff;line-height:1}
+.vera-sub{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:#2a5a7a;letter-spacing:.2em;text-transform:uppercase}
+.vera-badge{font-family:'JetBrains Mono',monospace;font-size:.52rem;padding:2px 8px;border:1px solid #00ffc8;color:#00ffc8;letter-spacing:.2em;text-transform:uppercase;margin-left:auto}
+.verdict-panel{padding:.8rem 1.2rem;border-left:3px solid #00ffc8;background:rgba(0,255,200,.03);margin:.5rem 0 1.2rem;font-family:'JetBrains Mono',monospace}
+.verdict-label{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;color:#e8f4ff}
+.verdict-meta{font-size:.58rem;color:#2a5a7a;letter-spacing:.1em;margin-top:.3rem}
+.sec-label{font-family:'JetBrains Mono',monospace;font-size:.55rem;letter-spacing:.25em;color:#2a5a7a;text-transform:uppercase;border-bottom:1px solid #0d2030;padding-bottom:.3rem;margin-bottom:.8rem}
+.audit-warn{font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:.4rem .7rem;margin:.25rem 0;border-left:2px solid}
+.wl{border-color:#4a9a7a;background:rgba(74,154,122,.06);color:#6abf9a}
+.wm{border-color:#c87020;background:rgba(200,112,32,.06);color:#e89040}
+.wh{border-color:#c03030;background:rgba(192,48,48,.06);color:#e05050}
+.wc{border-color:#ff2050;background:rgba(255,32,80,.08);color:#ff4070;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.hbar-wrap{background:#0d1820;height:3px;border-radius:2px;overflow:hidden;margin-top:.4rem}
+.hbar{height:100%;border-radius:2px}
+.ev-item{padding:.4rem 0;border-bottom:1px solid #0d1820;font-size:.62rem;display:flex;gap:.7rem;align-items:flex-start}
+.ev-pro{color:#00ffc8}.ev-ctr{color:#ff5050}
+.ev-id{color:#2a5a7a;font-size:.52rem;white-space:nowrap}
+.ev-text{color:#8ab0c8;flex:1;line-height:1.4}
+.no-data{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:#2a5a7a;padding:2rem;text-align:center;border:1px dashed #0d2030;letter-spacing:.1em}
+.graph-stat{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:#4a7a9b;line-height:2.2}
+.scanline{position:fixed;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:9999}
 </style>
 <div class="scanline"></div>
 """, unsafe_allow_html=True)
 
+PLOT_BG  = "#030608"
+GRID_CLR = "#0d2030"
+TEXT_CLR = "#4a7a9b"
+CYAN     = "#00ffc8"
+RED      = "#ff5050"
+AMBER    = "#e89040"
 
-# ── Data Loading ─────────────────────────────────────────────────
-@st.cache_data(ttl=8)
-def load_reports(data_dir="data"):
-    reports = []
-    for p in sorted(glob.glob(f"{data_dir}/*_report.json")):
-        try:
-            with open(p, encoding="utf-8") as f:
-                reports.append(json.load(f))
-        except Exception:
-            continue
-    return reports
-
-
-@st.cache_data(ttl=8)
-def load_belief_updates(data_dir="data"):
-    rows = []
-    for p in glob.glob(f"{data_dir}/belief_updates.jsonl"):
-        try:
-            with open(p, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        rows.append(json.loads(line))
-        except Exception:
-            continue
-    if not rows:
-        return pd.DataFrame()
-    df = pd.DataFrame(rows)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    return df
-
-
-# ── Plotly Theme ─────────────────────────────────────────────────
-PLOT_BG   = "#030608"
-GRID_CLR  = "#0d2030"
-TEXT_CLR  = "#4a7a9b"
-CYAN      = "#00ffc8"
-RED       = "#ff5050"
-AMBER     = "#e89040"
-
-def dark_layout(fig, height=280, title=""):
+def dark_layout(fig, height=260, title=""):
     fig.update_layout(
-        height=height,
-        title=title,
-        paper_bgcolor=PLOT_BG,
-        plot_bgcolor=PLOT_BG,
-        font=dict(family="JetBrains Mono", color=TEXT_CLR, size=10),
-        margin=dict(l=8, r=8, t=30 if title else 8, b=8),
-        legend=dict(
-            bgcolor="rgba(0,0,0,0)",
-            font=dict(size=9),
-        ),
+        height=height, title=title,
+        paper_bgcolor=PLOT_BG, plot_bgcolor=PLOT_BG,
+        font=dict(family="JetBrains Mono", color=TEXT_CLR, size=9),
+        margin=dict(l=8,r=8,t=28 if title else 8,b=8),
+        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(size=8)),
     )
     fig.update_xaxes(gridcolor=GRID_CLR, zeroline=False, showline=False)
     fig.update_yaxes(gridcolor=GRID_CLR, zeroline=False, showline=False)
     return fig
 
+@st.cache_data(ttl=10)
+def load_reports(data_dir="data"):
+    reports=[]
+    for p in sorted(glob.glob(f"{data_dir}/*_report.json")):
+        try:
+            with open(p,encoding="utf-8") as f: reports.append(json.load(f))
+        except: continue
+    return reports
 
-# ── Header ───────────────────────────────────────────────────────
-reports = load_reports()
-belief_df = load_belief_updates()
+@st.cache_data(ttl=10)
+def load_belief_updates(data_dir="data"):
+    rows=[]
+    for p in glob.glob(f"{data_dir}/belief_updates.jsonl"):
+        try:
+            with open(p,encoding="utf-8") as f:
+                for line in f:
+                    s=line.strip()
+                    if s: rows.append(json.loads(s))
+        except: continue
+    if not rows: return pd.DataFrame()
+    df=pd.DataFrame(rows)
+    df["timestamp"]=pd.to_datetime(df["timestamp"])
+    return df
 
-ts_now = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+@st.cache_data(ttl=15)
+def load_graph_data(vault_path="vault"):
+    """Load and parse Obsidian vault for graph rendering."""
+    import re
+    from collections import defaultdict
+    vault=Path(vault_path)
+    if not vault.exists(): return None, {}
+
+    nodes, edges = {}, []
+    for md in vault.rglob("*.md"):
+        name=md.stem
+        # Classify
+        if name.startswith("EVD-RT"): ntype="counter"
+        elif name.startswith("EVD-"): ntype="evidence"
+        elif re.match(r'\d{4}-\d{2}-\d{2}',name) or name.startswith("vera_"): ntype="session"
+        elif name=="_index": ntype="index"
+        else: ntype="entity"
+
+        try: content=md.read_text(encoding="utf-8",errors="ignore")
+        except: content=""
+
+        belief=None
+        m=re.search(r'belief_after:\s*([\d.]+)',content)
+        if m: belief=float(m.group(1))
+
+        nodes[name]={"type":ntype,"belief":belief,"path":str(md)}
+
+        for raw in re.findall(r'\[\[([^\]]+)\]\]',content):
+            link=raw.split("/")[-1].replace(".md","")
+            if link!=name:
+                edges.append((name,link))
+
+    return nodes, edges
+
+def render_knowledge_graph(vault_path="vault", height=520):
+    """Build and render the knowledge graph from vault data."""
+    try:
+        import networkx as nx
+    except ImportError:
+        st.markdown('<div class="no-data">pip install networkx to enable graph view</div>', unsafe_allow_html=True)
+        return
+
+    nodes, edges = load_graph_data(vault_path)
+    if not nodes:
+        st.markdown('<div class="no-data">No vault data — run vera.py with --vault flag first</div>', unsafe_allow_html=True)
+        return
+
+    G=nx.Graph()
+    for name,data in nodes.items():
+        G.add_node(name,**data)
+    for u,v in edges:
+        if u in nodes or v in nodes:
+            G.add_edge(u,v)
+
+    if G.number_of_nodes()==0:
+        st.markdown('<div class="no-data">Empty graph</div>', unsafe_allow_html=True)
+        return
+
+    pos=nx.spring_layout(G,k=2.8,seed=42,iterations=60)
+
+    # Edge trace
+    ex,ey=[],[]
+    for u,v in G.edges():
+        if u in pos and v in pos:
+            x0,y0=pos[u]; x1,y1=pos[v]
+            ex+=[x0,x1,None]; ey+=[y0,y1,None]
+
+    traces=[go.Scatter(x=ex,y=ey,mode="lines",
+        line=dict(width=0.5,color="#0d2030"),hoverinfo="none",showlegend=False)]
+
+    TYPE_COLOR={"session":CYAN,"evidence":"#4a90d9","counter":RED,
+                "entity":AMBER,"index":"#8b50ff","unknown":TEXT_CLR}
+    TYPE_SIZE={"session":20,"entity":16,"evidence":9,"counter":9,"index":24,"unknown":9}
+
+    type_groups=defaultdict(list)
+    for n in G.nodes(): type_groups[G.nodes[n].get("type","unknown")].append(n)
+
+    for ntype,nlist in type_groups.items():
+        nx_v,ny_v,txt,hov=[],[],[],[]
+        for n in nlist:
+            if n not in pos: continue
+            x,y=pos[n]; nx_v.append(x); ny_v.append(y)
+            txt.append(n[:18] if ntype in ("session","entity","index") else "")
+            b=G.nodes[n].get("belief")
+            bstr=f"<br>Belief: {b:.1%}" if b else ""
+            hov.append(f"<b>{n}</b><br>Type: {ntype}<br>Links: {G.degree(n)}{bstr}")
+
+        traces.append(go.Scatter(
+            x=nx_v,y=ny_v,mode="markers+text",name=ntype.capitalize(),
+            text=txt,textposition="top center",
+            textfont=dict(family="JetBrains Mono,monospace",size=8,
+                         color=TYPE_COLOR.get(ntype,TEXT_CLR)),
+            hovertemplate="%{customdata}<extra></extra>",customdata=hov,
+            marker=dict(size=TYPE_SIZE.get(ntype,9),
+                       color=TYPE_COLOR.get(ntype,TEXT_CLR),
+                       line=dict(width=1.5,color="#030608"),opacity=0.92),
+        ))
+
+    fig=go.Figure(data=traces)
+    fig.update_layout(
+        height=height,paper_bgcolor=PLOT_BG,plot_bgcolor=PLOT_BG,
+        font=dict(family="JetBrains Mono,monospace",color=TEXT_CLR,size=9),
+        margin=dict(l=0,r=0,t=0,b=0),showlegend=True,
+        legend=dict(bgcolor="rgba(0,0,0,0)",font=dict(size=8,color=TEXT_CLR),
+                   x=0.01,y=0.99),
+        xaxis=dict(showgrid=False,zeroline=False,showticklabels=False),
+        yaxis=dict(showgrid=False,zeroline=False,showticklabels=False),
+        hovermode="closest",
+    )
+    st.plotly_chart(fig,use_container_width=True)
+
+    # Stats below graph
+    import networkx as nx2
+    G2=G  # reuse
+    try:
+        most_conn=sorted(G2.degree(),key=lambda x:x[1],reverse=True)[:4]
+        conn_str=" &nbsp;·&nbsp; ".join(f"`{n}` ({d})" for n,d in most_conn)
+    except: conn_str="—"
+    st.markdown(f"""
+    <div class="graph-stat">
+      NODES <span style="color:#e8f4ff">{G2.number_of_nodes()}</span> &nbsp;·&nbsp;
+      EDGES <span style="color:#e8f4ff">{G2.number_of_edges()}</span> &nbsp;·&nbsp;
+      COMPONENTS <span style="color:#e8f4ff">{nx.number_connected_components(G2)}</span><br>
+      MOST CONNECTED &nbsp; {conn_str}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════
+# MAIN LAYOUT
+# ════════════════════════════════════════════════════════════════
+
+reports=load_reports()
+belief_df=load_belief_updates()
+ts_now=datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+
+# Header
 st.markdown(f"""
 <div class="vera-header">
   <div>
     <div class="vera-title">VERA // OPS</div>
-    <div class="vera-subtitle">Veridical Evidence Reasoning Architecture — Epistemic Operations Center</div>
+    <div class="vera-sub">Veridical Evidence Reasoning Architecture — Epistemic Operations Center</div>
   </div>
   <div class="vera-badge">v0.4.0 // {ts_now}</div>
 </div>
 """, unsafe_allow_html=True)
 
 if not reports:
-    st.markdown('<div class="no-data">⬡ NO SESSION DATA FOUND<br>Run: python vera.py --ontology ontologies/uap.yaml</div>', unsafe_allow_html=True)
+    st.markdown('<div class="no-data">⬡ NO SESSION DATA<br>Run: python vera.py --ontology ontologies/uap.yaml</div>', unsafe_allow_html=True)
     st.stop()
 
+latest=reports[-1]
+bs=latest.get("belief_summary",{})
+verdict=latest.get("verdict",{})
+audit=latest.get("epistemic_audit",{})
+belief=bs.get("current_belief",0)
+prior=bs.get("prior",0.1)
+health=audit.get("health_score")
 
-# ── Latest Session Data ───────────────────────────────────────────
-latest    = reports[-1]
-bs        = latest.get("belief_summary", {})
-verdict   = latest.get("verdict", {})
-audit     = latest.get("epistemic_audit", {})
-belief    = bs.get("current_belief", 0)
-prior     = bs.get("prior", 0.1)
-net_shift = bs.get("net_shift", 0)
-health    = audit.get("health_score")
+vcolor_map={"green":CYAN,"yellow":AMBER,"orange":AMBER,"red":RED,"darkred":"#ff2050"}
+vcolor=vcolor_map.get(verdict.get("color","green"),CYAN)
 
-# Verdict color
-vcolor_map = {"green": CYAN, "yellow": AMBER, "orange": AMBER, "red": RED, "darkred": "#ff2050"}
-vcolor = vcolor_map.get(verdict.get("color", "green"), CYAN)
-
-# ── Verdict Panel ────────────────────────────────────────────────
 st.markdown(f"""
 <div class="verdict-panel" style="border-left-color:{vcolor}">
   <div class="verdict-label" style="color:{vcolor}">{verdict.get('label','—').upper()}</div>
@@ -305,378 +278,175 @@ st.markdown(f"""
     SESSION {latest.get('session_id','—')} &nbsp;│&nbsp;
     DOMAIN: {latest.get('domain','—')} &nbsp;│&nbsp;
     DURATION: {latest.get('duration_seconds',0):.1f}s &nbsp;│&nbsp;
-    LRP MESSAGES: {latest.get('lrp_messages_sent',0)}
+    LRP: {latest.get('lrp_messages_sent',0)} msgs
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Top Metrics Row ───────────────────────────────────────────────
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("BELIEF", f"{belief:.1%}", f"{net_shift:+.1%}")
-c2.metric("PRIOR",  f"{prior:.1%}")
-c3.metric("PRO EV", bs.get("pro_evidence", 0))
-c4.metric("COUNTER", bs.get("counter_evidence", 0))
-c5.metric("SESSIONS", len(reports))
-hs_display = f"{health:.3f}" if health else "—"
-c6.metric("HEALTH", hs_display)
+c1,c2,c3,c4,c5,c6=st.columns(6)
+c1.metric("BELIEF",f"{belief:.1%}",f"{belief-prior:+.1%}")
+c2.metric("PRIOR",f"{prior:.1%}")
+c3.metric("PRO EV",bs.get("pro_evidence",0))
+c4.metric("COUNTER",bs.get("counter_evidence",0))
+c5.metric("SESSIONS",len(reports))
+c6.metric("HEALTH",f"{health:.3f}" if health else "—")
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ── Main Layout: Left | Center | Right ───────────────────────────
-col_left, col_center, col_right = st.columns([1, 2, 1])
+# ── Tabs ─────────────────────────────────────────────────────────
+tab1, tab2, tab3 = st.tabs(["📈 Belief & Evidence", "🕸️ Knowledge Graph", "🔍 Evidence Explorer"])
 
+with tab1:
+    col_l, col_r = st.columns([3, 1])
 
-# ════════════════════════════
-# LEFT — Epistemic Auditor
-# ════════════════════════════
-with col_left:
-    st.markdown('<div class="section-label">⬡ Epistemic Auditor</div>', unsafe_allow_html=True)
+    with col_l:
+        st.markdown('<div class="sec-label">⬡ Belief Evolution</div>', unsafe_allow_html=True)
+        if len(reports)>=2:
+            sdf=pd.DataFrame([{
+                "n":i+1,
+                "belief":r.get("belief_summary",{}).get("current_belief",0),
+                "health":r.get("epistemic_audit",{}).get("health_score"),
+            } for i,r in enumerate(reports)])
 
-    if health is not None:
-        health_pct = int(health * 100)
-        bar_color = CYAN if health > 0.8 else AMBER if health > 0.5 else RED
-        icon = "🟢" if health > 0.8 else "🟡" if health > 0.5 else "🔴"
-        st.markdown(f"""
-        <div style="font-family:JetBrains Mono;font-size:0.6rem;color:{TEXT_CLR};letter-spacing:0.1em;margin-bottom:4px">
-          SYSTEM HEALTH &nbsp; {icon} {health:.3f}
-        </div>
-        <div class="health-bar-wrap">
-          <div class="health-bar" style="width:{health_pct}%;background:{bar_color}"></div>
-        </div>
-        """, unsafe_allow_html=True)
+            fig=go.Figure()
+            fig.add_hline(y=prior,line_dash="dot",line_color=GRID_CLR,line_width=1,
+                annotation_text=f"PRIOR {prior:.0%}",annotation_font=dict(size=8,color=TEXT_CLR))
+            fig.add_trace(go.Scatter(x=sdf["n"],y=sdf["belief"],mode="lines",
+                line=dict(color=CYAN,width=5),opacity=0.12,showlegend=False,hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=sdf["n"],y=sdf["belief"],mode="lines+markers",
+                name="BELIEF",line=dict(color=CYAN,width=2),
+                marker=dict(size=7,color=CYAN,line=dict(color="#030608",width=2)),
+                hovertemplate="Session %{x}<br>Belief: %{y:.1%}<extra></extra>"))
+            if sdf["health"].notna().any():
+                fig.add_trace(go.Scatter(x=sdf["n"],y=sdf["health"],mode="lines+markers",
+                    name="HEALTH",line=dict(color=AMBER,width=1.5,dash="dot"),
+                    marker=dict(size=4,color=AMBER),yaxis="y2",
+                    hovertemplate="Health: %{y:.3f}<extra></extra>"))
+            dark_layout(fig,height=230)
+            fig.update_layout(
+                yaxis=dict(tickformat=".0%",range=[0,1],gridcolor=GRID_CLR),
+                yaxis2=dict(overlaying="y",side="right",range=[0,1],showgrid=False,tickformat=".2f"),
+                xaxis=dict(title="SESSION",gridcolor=GRID_CLR,dtick=1),
+                legend=dict(orientation="h",y=1.08,x=0),
+            )
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.markdown('<div class="no-data">Run 2+ sessions to see evolution</div>',unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="sec-label">⬡ Bayesian Update Trail</div>', unsafe_allow_html=True)
+        if not belief_df.empty:
+            colors=[CYAN if s else RED for s in belief_df.get("supports_hypothesis",[])]
+            symbols=["circle" if s else "x" for s in belief_df.get("supports_hypothesis",[])]
+            fig2=go.Figure()
+            fig2.add_trace(go.Scatter(x=list(range(len(belief_df))),y=belief_df["posterior"],
+                mode="lines",line=dict(color=CYAN,width=1.5),opacity=0.5,showlegend=False,hoverinfo="skip"))
+            fig2.add_trace(go.Scatter(x=list(range(len(belief_df))),y=belief_df["posterior"],
+                mode="markers",name="UPDATE",
+                marker=dict(size=8,color=colors,symbol=symbols,line=dict(width=1,color="#030608")),
+                hovertemplate="<b>#%{x}</b><br>Posterior: %{y:.2%}<extra></extra>"))
+            fig2.add_hline(y=prior,line_dash="dot",line_color=GRID_CLR,line_width=1)
+            dark_layout(fig2,height=200)
+            fig2.update_layout(yaxis=dict(tickformat=".0%",gridcolor=GRID_CLR),
+                               xaxis=dict(title="UPDATE #",gridcolor=GRID_CLR))
+            st.plotly_chart(fig2,use_container_width=True)
 
-    # Audit warnings
-    warn_count = audit.get("total_warnings", 0)
-    warn_by_sev = audit.get("by_severity", {})
-    warn_by_type = audit.get("by_type", {})
-
-    if warn_count == 0:
-        st.markdown('<div class="audit-warn warn-low">✓ No epistemic warnings detected</div>', unsafe_allow_html=True)
-    else:
-        sev_class = {"LOW": "warn-low", "MEDIUM": "warn-medium",
-                     "HIGH": "warn-high", "CRITICAL": "warn-critical"}
-        for sev, cnt in warn_by_sev.items():
-            cls = sev_class.get(sev, "warn-low")
-            st.markdown(f'<div class="audit-warn {cls}">{sev} &nbsp;×{cnt}</div>', unsafe_allow_html=True)
+    with col_r:
+        st.markdown('<div class="sec-label">⬡ Epistemic Auditor</div>', unsafe_allow_html=True)
+        if health is not None:
+            hp=int(health*100)
+            bc=CYAN if health>0.8 else AMBER if health>0.5 else RED
+            icon="🟢" if health>0.8 else "🟡" if health>0.5 else "🔴"
+            st.markdown(f"""
+            <div style="font-family:JetBrains Mono;font-size:.58rem;color:{TEXT_CLR};margin-bottom:3px">
+              HEALTH &nbsp; {icon} {health:.3f}
+            </div>
+            <div class="hbar-wrap"><div class="hbar" style="width:{hp}%;background:{bc}"></div></div>
+            """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        warn_by_sev=audit.get("by_severity",{})
+        sev_cls={"LOW":"wl","MEDIUM":"wm","HIGH":"wh","CRITICAL":"wc"}
+        if not warn_by_sev:
+            st.markdown('<div class="audit-warn wl">✓ No warnings</div>',unsafe_allow_html=True)
+        for sev,cnt in warn_by_sev.items():
+            cls=sev_cls.get(sev,"wl")
+            st.markdown(f'<div class="audit-warn {cls}">{sev} ×{cnt}</div>',unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        for wtype, cnt in warn_by_type.items():
-            st.markdown(f'<div style="font-family:JetBrains Mono;font-size:0.58rem;color:#2a5a7a;padding:2px 0">'
-                        f'<span style="color:#4a7a9b">{wtype}</span> ×{cnt}</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-label">⬡ LR Statistics</div>', unsafe_allow_html=True)
-    mean_lr = audit.get("mean_lr")
-    lr_std  = audit.get("lr_std")
-    max_shift = audit.get("max_single_shift")
-    if mean_lr:
-        lr_std_str = f"{lr_std:.4f}" if lr_std else "—"
-        max_shift_str = f"{max_shift:.4f}" if max_shift else "—"
+        st.markdown('<div class="sec-label">⬡ LR Stats</div>', unsafe_allow_html=True)
+        mlr=audit.get("mean_lr"); lstd=audit.get("lr_std"); msh=audit.get("max_single_shift")
+        mlr_s=f"{mlr:.4f}" if mlr else "—"
+        lstd_s=f"{lstd:.4f}" if lstd else "—"
+        msh_s=f"{msh:.4f}" if msh else "—"
         st.markdown(f"""
-            <div style="font-family:JetBrains Mono;font-size:0.62rem;line-height:2.2;color:#4a7a9b">
-              MEAN LR &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{mean_lr:.4f}</span><br>
-              LR STD &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{lr_std_str}</span><br>
-              MAX SHIFT &nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{max_shift_str}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-
-# ════════════════════════════
-# CENTER — Belief Evolution + Bayes Trail
-# ════════════════════════════
-with col_center:
-    st.markdown('<div class="section-label">⬡ Belief Evolution</div>', unsafe_allow_html=True)
-
-    if len(reports) >= 2:
-        session_data = []
-        for i, r in enumerate(reports):
-            b2 = r.get("belief_summary", {})
-            a2 = r.get("epistemic_audit", {})
-            session_data.append({
-                "n": i + 1,
-                "ts": r.get("timestamp", "")[:16],
-                "belief": b2.get("current_belief", 0),
-                "prior": b2.get("prior", 0.1),
-                "health": a2.get("health_score"),
-                "pro": b2.get("pro_evidence", 0),
-                "counter": b2.get("counter_evidence", 0),
-            })
-        sdf = pd.DataFrame(session_data)
-
-        fig = go.Figure()
-
-        # Prior reference band
-        fig.add_hrect(
-            y0=0, y1=prior,
-            fillcolor="rgba(0,255,200,0.03)",
-            line_width=0,
-        )
-        fig.add_hline(
-            y=prior, line_dash="dot",
-            line_color=GRID_CLR, line_width=1,
-            annotation_text=f"PRIOR {prior:.0%}",
-            annotation_font=dict(size=8, color=TEXT_CLR),
-            annotation_position="right",
-        )
-
-        # Belief line with glow effect (two traces)
-        fig.add_trace(go.Scatter(
-            x=sdf["n"], y=sdf["belief"],
-            mode="lines",
-            line=dict(color=CYAN, width=6),
-            opacity=0.15,
-            showlegend=False,
-            hoverinfo="skip",
-        ))
-        fig.add_trace(go.Scatter(
-            x=sdf["n"], y=sdf["belief"],
-            mode="lines+markers",
-            name="BELIEF",
-            line=dict(color=CYAN, width=2),
-            marker=dict(
-                size=7, color=CYAN,
-                line=dict(color="#030608", width=2),
-            ),
-            hovertemplate="<b>Session %{x}</b><br>Belief: %{y:.1%}<extra></extra>",
-        ))
-
-        # Health overlay
-        if sdf["health"].notna().any():
-            fig.add_trace(go.Scatter(
-                x=sdf["n"], y=sdf["health"],
-                mode="lines+markers",
-                name="HEALTH",
-                line=dict(color=AMBER, width=1.5, dash="dot"),
-                marker=dict(size=4, color=AMBER),
-                yaxis="y2",
-                hovertemplate="Health: %{y:.3f}<extra></extra>",
-            ))
-
-        dark_layout(fig, height=240)
-        fig.update_layout(
-            yaxis=dict(tickformat=".0%", range=[0, 1], title="", gridcolor=GRID_CLR),
-            yaxis2=dict(
-                overlaying="y", side="right",
-                range=[0, 1], showgrid=False,
-                tickformat=".2f", title="",
-            ),
-            xaxis=dict(title="SESSION", gridcolor=GRID_CLR, dtick=1),
-            legend=dict(orientation="h", y=1.08, x=0),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    else:
-        st.markdown('<div class="no-data">Run 2+ sessions to see evolution</div>', unsafe_allow_html=True)
-
-    # ── Bayes Update Trail ──
-    st.markdown('<div class="section-label">⬡ Bayesian Update Trail</div>', unsafe_allow_html=True)
-
-    if not belief_df.empty:
-        fig2 = go.Figure()
-
-        colors = [CYAN if s else RED for s in belief_df.get("supports_hypothesis", [])]
-        symbols = ["circle" if s else "x" for s in belief_df.get("supports_hypothesis", [])]
-
-        fig2.add_trace(go.Scatter(
-            x=list(range(len(belief_df))),
-            y=belief_df["posterior"],
-            mode="lines",
-            line=dict(color=CYAN, width=1.5),
-            opacity=0.6,
-            showlegend=False,
-            hoverinfo="skip",
-        ))
-        fig2.add_trace(go.Scatter(
-            x=list(range(len(belief_df))),
-            y=belief_df["posterior"],
-            mode="markers",
-            marker=dict(
-                size=8,
-                color=colors,
-                symbol=symbols,
-                line=dict(width=1, color="#030608"),
-            ),
-            name="UPDATE",
-            hovertemplate=(
-                "<b>#%{x}</b><br>"
-                "Posterior: %{y:.2%}<br>"
-                "LR: %{customdata:.4f}<extra></extra>"
-            ),
-            customdata=belief_df.get("likelihood_ratio", [1]*len(belief_df)),
-        ))
-
-        # Threshold line at prior
-        fig2.add_hline(y=prior, line_dash="dot", line_color=GRID_CLR, line_width=1)
-
-        dark_layout(fig2, height=200)
-        fig2.update_layout(
-            yaxis=dict(tickformat=".0%", gridcolor=GRID_CLR),
-            xaxis=dict(title="UPDATE #", gridcolor=GRID_CLR),
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.markdown('<div class="no-data">No Bayesian update data</div>', unsafe_allow_html=True)
-
-
-# ════════════════════════════
-# RIGHT — Evidence Stream
-# ════════════════════════════
-with col_right:
-    st.markdown('<div class="section-label">⬡ Evidence Stream</div>', unsafe_allow_html=True)
-
-    all_ev = []
-    for r in reports[-3:]:
-        for ev in r.get("pro_evidence", []):
-            ev["_dir"] = "pro"
-            all_ev.append(ev)
-        for ev in r.get("counter_evidence", []):
-            ev["_dir"] = "counter"
-            all_ev.append(ev)
-
-    # Show last 12 evidence pieces, most recent first
-    for ev in reversed(all_ev[-12:]):
-        is_pro = ev["_dir"] == "pro"
-        icon  = "▲" if is_pro else "▼"
-        cls   = "ev-pro" if is_pro else "ev-counter"
-        score = ev.get("semantic_score", 0)
-        etype = ev.get("source_type", "unknown")
-        summ  = (ev.get("summary") or "—")[:90]
-        ev_id = ev.get("id", "—")[-10:]
-
-        st.markdown(f"""
-        <div class="ev-item">
-          <div class="{cls}" style="font-size:0.7rem;min-width:12px">{icon}</div>
-          <div>
-            <div class="ev-id">{ev_id} &nbsp;·&nbsp; {etype} &nbsp;·&nbsp; score:{score:.2f}</div>
-            <div class="ev-text">{summ}</div>
-          </div>
+        <div style="font-family:JetBrains Mono;font-size:.6rem;line-height:2.2;color:{TEXT_CLR}">
+          MEAN LR &nbsp;&nbsp;<span style="color:#c8d8e8">{mlr_s}</span><br>
+          LR STD &nbsp;&nbsp;&nbsp;<span style="color:#c8d8e8">{lstd_s}</span><br>
+          MAX SHIFT &nbsp;<span style="color:#c8d8e8">{msh_s}</span>
         </div>
         """, unsafe_allow_html=True)
 
-    if not all_ev:
-        st.markdown('<div class="no-data">No evidence collected yet</div>', unsafe_allow_html=True)
+with tab2:
+    st.markdown('<div class="sec-label">⬡ Obsidian Knowledge Graph — Live View</div>',
+                unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-family:JetBrains Mono;font-size:.6rem;color:#2a5a7a;margin-bottom:.8rem">
+      Nodes: 🟢 Sessions &nbsp;·&nbsp; 🔵 Pro Evidence &nbsp;·&nbsp;
+      🔴 Counter Evidence &nbsp;·&nbsp; 🟡 Entities &nbsp;·&nbsp; 🟣 Index<br>
+      Run with: <code>python vera.py --ontology ontologies/uap.yaml --vault vault/</code>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Evidence Type Donut ──
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-label">⬡ Source Distribution</div>', unsafe_allow_html=True)
+    vault_path = st.sidebar.text_input("Vault path", value="vault")
+    render_knowledge_graph(vault_path, height=520)
+
+with tab3:
+    st.markdown('<div class="sec-label">⬡ Evidence Explorer</div>', unsafe_allow_html=True)
+    all_ev=[]
+    for r in reports:
+        for ev in r.get("pro_evidence",[]): ev["_dir"]="Pro"; ev["_s"]=r.get("session_id","")[-8:]; all_ev.append(ev)
+        for ev in r.get("counter_evidence",[]): ev["_dir"]="Counter"; ev["_s"]=r.get("session_id","")[-8:]; all_ev.append(ev)
 
     if all_ev:
-        from collections import Counter
-        type_counts = Counter(ev.get("source_type", "unknown") for ev in all_ev)
-        labels = list(type_counts.keys())
-        values = list(type_counts.values())
+        fa,fb=st.columns(2)
+        df_filter=fa.selectbox("Direction",["All","Pro","Counter"])
+        type_opts=["All"]+sorted(set(e.get("source_type","") for e in all_ev))
+        tf=fb.selectbox("Source Type",type_opts)
+        filtered=all_ev
+        if df_filter!="All": filtered=[e for e in filtered if e["_dir"]==df_filter]
+        if tf!="All": filtered=[e for e in filtered if e.get("source_type")==tf]
+        for ev in filtered[-8:]:
+            is_pro=ev["_dir"]=="Pro"
+            icon="▲" if is_pro else "▼"
+            cls="ev-pro" if is_pro else "ev-ctr"
+            st.markdown(f"""
+            <div class="ev-item">
+              <div class="{cls}">{icon}</div>
+              <div>
+                <div class="ev-id">{ev.get('id','')[-12:]} · {ev.get('source_type','')} · {ev.get('semantic_score',0):.2f}</div>
+                <div class="ev-text">{(ev.get('summary') or '')[:100]}</div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="no-data">No evidence yet</div>', unsafe_allow_html=True)
 
-        palette = [CYAN, AMBER, RED, "#6050e0", "#20a0d0"]
-
-        fig3 = go.Figure(go.Pie(
-            labels=labels,
-            values=values,
-            hole=0.65,
-            marker=dict(
-                colors=palette[:len(labels)],
-                line=dict(color="#030608", width=3),
-            ),
-            textinfo="none",
-            hovertemplate="<b>%{label}</b><br>%{value} pieces<br>%{percent}<extra></extra>",
-        ))
-        fig3.add_annotation(
-            text=f"<b>{len(all_ev)}</b><br>TOTAL",
-            x=0.5, y=0.5,
-            font=dict(family="Bebas Neue", size=20, color="#e8f4ff"),
-            showarrow=False,
-        )
-        dark_layout(fig3, height=200)
-        fig3.update_layout(
-            showlegend=True,
-            legend=dict(font=dict(size=8), orientation="h", y=-0.15),
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-
-# ── Footer ────────────────────────────────────────────────────────
+# Footer
 st.markdown("<hr>", unsafe_allow_html=True)
-fc1, fc2, fc3 = st.columns(3)
-
-with fc1:
-    st.markdown('<div class="section-label">⬡ Session Log</div>', unsafe_allow_html=True)
-    if reports:
-        rows = []
-        for r in reports[-5:]:
-            b3 = r.get("belief_summary", {})
-            rows.append({
-                "session": r.get("session_id","")[-8:],
-                "belief": f"{b3.get('current_belief',0):.1%}",
-                "pro": b3.get("pro_evidence",0),
-                "ctr": b3.get("counter_evidence",0),
-            })
-        rdf = pd.DataFrame(rows)
-        st.dataframe(
-            rdf,
-            use_container_width=True,
-            height=160,
-            hide_index=True,
-        )
-
-with fc2:
-    st.markdown('<div class="section-label">⬡ IST / SOLL</div>', unsafe_allow_html=True)
-    modules = {
-        "Ontology Loader": "core/ontology_loader.py",
-        "Bayesian Core":   "core/bayesian/updater.py",
-        "GitHub Agent":    "agents/osint_github.py",
-        "HF Agent":        "agents/osint_huggingface.py",
-        "Red Team":        "agents/red_team.py",
-        "Obsidian Export": "obsidian_writer/exporter.py",
-        "LRP Messenger":   "core/lrp_messenger.py",
-        "Auditor":         "core/auditor.py",
-        "Dashboard":       "dashboard/app.py",
-        "Autopilot":       "core/autopilot.py",
-        "ChromaDB":        "core/memory/chromadb_store.py",
-        "NLP Agent":       "agents/nlp_signal.py",
-    }
-    built = sum(1 for p in modules.values() if Path(p).exists())
-    total = len(modules)
-    pct   = int(built / total * 100)
-
-    st.markdown(f"""
-    <div style="font-family:JetBrains Mono;font-size:0.62rem;color:#4a7a9b;margin-bottom:8px">
-      COMPLETION &nbsp;<span style="color:{CYAN}">{pct}%</span> &nbsp;({built}/{total})
-    </div>
-    <div class="health-bar-wrap" style="margin-bottom:12px">
-      <div class="health-bar" style="width:{pct}%;background:{CYAN}"></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    for name, path in list(modules.items())[:8]:
-        exists = Path(path).exists()
-        icon   = "✓" if exists else "○"
-        color  = CYAN if exists else "#1a3040"
-        st.markdown(
-            f'<div style="font-family:JetBrains Mono;font-size:0.55rem;color:{color};padding:1px 0">'
-            f'{icon} {name}</div>',
-            unsafe_allow_html=True,
-        )
-
-with fc3:
-    st.markdown('<div class="section-label">⬡ Run Commands</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div style="font-family:JetBrains Mono;font-size:0.6rem;color:#2a5a7a;line-height:2.5">
-      <span style="color:#00ffc8">▸</span> New cycle<br>
-      <code style="color:#4a7a9b;font-size:0.55rem">python vera.py --ontology ontologies/uap.yaml</code><br>
-      <span style="color:#00ffc8">▸</span> With Obsidian<br>
-      <code style="color:#4a7a9b;font-size:0.55rem">python vera.py --ontology ontologies/uap.yaml --vault vault/</code><br>
-      <span style="color:#00ffc8">▸</span> Preflight scan<br>
-      <code style="color:#4a7a9b;font-size:0.55rem">python irsanai_preflight.py --deep</code><br>
-      <span style="color:#00ffc8">▸</span> Status report<br>
-      <code style="color:#4a7a9b;font-size:0.55rem">python irsanai_patchbot_status.py</code>
-    </div>
-    """, unsafe_allow_html=True)
-
+fb1,fb2,fb3=st.columns([2,1,1])
+with fb2:
+    if st.button("⬡ Resonance Report", use_container_width=True):
+        import subprocess as _sp
+        _r=_sp.run([sys.executable,".tools/irsanai_resonance_reporter.py"],
+                   capture_output=True,text=True)
+        st.success("Report generated") if _r.returncode==0 else st.error(_r.stderr[:200])
+with fb3:
+    st.markdown(
+        '<a href="https://github.com/IrsanAI/IrsanAI-VERA" target="_blank" '
+        'style="font-family:JetBrains Mono;font-size:.58rem;color:#00ffc8;'
+        'text-decoration:none;border:1px solid #00ffc8;padding:5px 12px;'
+        'display:inline-block;margin-top:3px">⬡ GitHub</a>',
+        unsafe_allow_html=True)
 st.markdown(f"""
-<div style="font-family:JetBrains Mono;font-size:0.5rem;color:#0d2030;
-            text-align:center;padding:1rem 0;letter-spacing:0.2em">
-  IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; EPISTEMIC OPERATIONS CENTER &nbsp;·&nbsp;
-  {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now}
-</div>
-""", unsafe_allow_html=True)
+<div style="font-family:JetBrains Mono;font-size:.48rem;color:#0d2030;text-align:center;padding:.8rem 0;letter-spacing:.2em">
+  IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now} &nbsp;·&nbsp;
+  <a href="https://github.com/IrsanAI/IrsanAI-VERA" style="color:#0d2030">github.com/IrsanAI/IrsanAI-VERA</a>
+</div>""", unsafe_allow_html=True)
