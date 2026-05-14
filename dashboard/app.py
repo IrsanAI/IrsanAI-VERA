@@ -12,7 +12,6 @@ import json
 import glob
 import sys
 import datetime
-import networkx as nx
 from pathlib import Path
 from collections import defaultdict
 
@@ -218,7 +217,7 @@ def render_knowledge_graph(vault_path="vault", height=520):
         yaxis=dict(showgrid=False,zeroline=False,showticklabels=False),
         hovermode="closest",
     )
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig,width="stretch")
 
     # Stats below graph
     import networkx as nx2
@@ -329,7 +328,7 @@ with tab1:
                 xaxis=dict(title="SESSION",gridcolor=GRID_CLR,dtick=1),
                 legend=dict(orientation="h",y=1.08,x=0),
             )
-            st.plotly_chart(fig,use_container_width=True)
+            st.plotly_chart(fig,width="stretch")
         else:
             st.markdown('<div class="no-data">Run 2+ sessions to see evolution</div>',unsafe_allow_html=True)
 
@@ -348,7 +347,7 @@ with tab1:
             dark_layout(fig2,height=200)
             fig2.update_layout(yaxis=dict(tickformat=".0%",gridcolor=GRID_CLR),
                                xaxis=dict(title="UPDATE #",gridcolor=GRID_CLR))
-            st.plotly_chart(fig2,use_container_width=True)
+            st.plotly_chart(fig2,width="stretch")
 
     with col_r:
         st.markdown('<div class="sec-label">⬡ Epistemic Auditor</div>', unsafe_allow_html=True)
@@ -396,7 +395,7 @@ with tab2:
     </div>
     """, unsafe_allow_html=True)
 
-    vault_path = st.sidebar.text_input("Vault path", value="vault")
+    vault_path = st.sidebar.text_input("Vault path", value="vault", key="vault_path_sidebar")
     render_knowledge_graph(vault_path, height=520)
 
 with tab3:
@@ -433,7 +432,7 @@ with tab3:
 st.markdown("<hr>", unsafe_allow_html=True)
 fb1,fb2,fb3=st.columns([2,1,1])
 with fb2:
-    if st.button("⬡ Resonance Report", use_container_width=True):
+    if st.button("⬡ Resonance Report", width="stretch"):
         import subprocess as _sp
         _r=_sp.run([sys.executable,".tools/irsanai_resonance_reporter.py"],
                    capture_output=True,text=True)
