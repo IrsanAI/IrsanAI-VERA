@@ -217,7 +217,7 @@ def render_knowledge_graph(vault_path="vault", height=520):
         yaxis=dict(showgrid=False,zeroline=False,showticklabels=False),
         hovermode="closest",
     )
-    st.plotly_chart(fig,width="stretch")
+    st.plotly_chart(fig,use_container_width=True)
 
     # Stats below graph
     import networkx as nx2
@@ -235,6 +235,45 @@ def render_knowledge_graph(vault_path="vault", height=520):
     </div>
     """, unsafe_allow_html=True)
 
+
+
+def build_session_story(reports):
+    """Build narrative and phase data from session history."""
+    if not reports:
+        return [], "No sessions yet."
+    phases = []
+    for i, r in enumerate(reports):
+        bs = r.get("belief_summary", {})
+        belief = bs.get("current_belief", 0)
+        pro = bs.get("pro_evidence", 0)
+        verdict = r.get("verdict", {}).get("label", "")
+        ts = r.get("timestamp", "")[:10]
+        if pro == 0:
+            phase_name, phase_color = "BLIND", RED
+        elif pro < 5:
+            phase_name, phase_color = "SEARCHING", AMBER
+        elif belief > 0.20:
+            phase_name, phase_color = "SIGNAL", CYAN
+        else:
+            phase_name, phase_color = "WEAK", "#6090c0"
+        phases.append({"n": i+1, "ts": ts, "belief": belief, "pro": pro,
+                       "verdict": verdict, "phase": phase_name, "color": phase_color})
+    first, last = phases[0], phases[-1]
+    delta = last["belief"] - first["belief"]
+    trend = "rising ↑" if delta > 0.05 else "falling ↓" if delta < -0.05 else "stable →"
+    blind = sum(1 for p in phases if p["phase"] == "BLIND")
+    signal = [p for p in phases if p["phase"] == "SIGNAL"]
+    narrative = (
+        f"VERA began with a prior of 10.0% and has run **{len(phases)} investigations** "
+        f"across the **{last['verdict'].lower()}** domain. "
+        f"Belief is **{trend}** at {last['belief']:.1%} ({delta:+.1%} net shift from prior). "
+    )
+    if blind > 0:
+        narrative += f"In {blind} early session(s), no pro-evidence was found — the Red Team dominated. "
+    if signal:
+        narrative += f"A signal emerged in session {signal[0]['n']} ({signal[0]['ts']}) when improved queries found 17 pro-evidence sources. "
+    narrative += "VERA continues to challenge every conclusion with adversarial counter-evidence."
+    return phases, narrative
 
 # ════════════════════════════════════════════════════════════════
 # MAIN LAYOUT
@@ -293,7 +332,7 @@ c6.metric("HEALTH",f"{health:.3f}" if health else "—")
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ── Tabs ─────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["📈 Belief & Evidence", "🕸️ Knowledge Graph", "🔍 Evidence Explorer"])
+tab1, tab2, tab3, tab4 = st.tabs(["📈 Belief & Evidence", "🕸️ Knowledge Graph", "🔍 Evidence Explorer", "🧭 Mission & Journey"])
 
 with tab1:
     col_l, col_r = st.columns([3, 1])
@@ -328,7 +367,7 @@ with tab1:
                 xaxis=dict(title="SESSION",gridcolor=GRID_CLR,dtick=1),
                 legend=dict(orientation="h",y=1.08,x=0),
             )
-            st.plotly_chart(fig,width="stretch")
+            st.plotly_chart(fig,use_container_width=True)
         else:
             st.markdown('<div class="no-data">Run 2+ sessions to see evolution</div>',unsafe_allow_html=True)
 
@@ -347,7 +386,7 @@ with tab1:
             dark_layout(fig2,height=200)
             fig2.update_layout(yaxis=dict(tickformat=".0%",gridcolor=GRID_CLR),
                                xaxis=dict(title="UPDATE #",gridcolor=GRID_CLR))
-            st.plotly_chart(fig2,width="stretch")
+            st.plotly_chart(fig2,use_container_width=True)
 
     with col_r:
         st.markdown('<div class="sec-label">⬡ Epistemic Auditor</div>', unsafe_allow_html=True)
@@ -395,7 +434,7 @@ with tab2:
     </div>
     """, unsafe_allow_html=True)
 
-    vault_path = st.sidebar.text_input("Vault path", value="vault", key="vault_path_sidebar")
+    vault_path = st.sidebar.text_input("Vault path", value="vault")
     render_knowledge_graph(vault_path, height=520)
 
 with tab3:
@@ -428,13 +467,115 @@ with tab3:
     else:
         st.markdown('<div class="no-data">No evidence yet</div>', unsafe_allow_html=True)
 
+
+with tab4:
+    import yaml as _yaml
+
+    st.markdown('<div class="sec-label">⬡ Domain Intent</div>', unsafe_allow_html=True)
+
+    onto = {}
+    try:
+        with open("ontologies/uap.yaml", encoding="utf-8") as _f:
+            onto = _yaml.safe_load(_f) or {}
+    except Exception:
+        pass
+
+    domain_name = onto.get("domain", "UAP Disclosure")
+    _prior = onto.get("bayesian", {}).get("prior_tech_coverup", 0.10)
+    seeds_high = onto.get("semantic_seeds", {}).get("high", [])
+    entities = onto.get("entities", [])
+    entity_names = [e.get("name","") for e in entities[:6]] if entities else []
+
+    d1, d2, d3 = st.columns(3)
+    d1.metric("DOMAIN", domain_name.upper()[:16])
+    d2.metric("PRIOR", f"{_prior:.0%}")
+    d3.metric("ENTITIES", len(entities))
+
+    if seeds_high:
+        st.markdown(f'<div style="font-family:JetBrains Mono;font-size:.58rem;color:#2a5a7a;margin-top:.5rem">HIGH-WEIGHT SEEDS &nbsp;·&nbsp; <span style="color:#4a7a9b">{" &nbsp;·&nbsp; ".join(seeds_high[:5])}</span></div>', unsafe_allow_html=True)
+    if entity_names:
+        ents = " &nbsp;·&nbsp; ".join(f'<span style="color:#e89040">{e}</span>' for e in entity_names)
+        st.markdown(f'<div style="font-family:JetBrains Mono;font-size:.58rem;color:#2a5a7a;margin-top:.3rem">ENTITIES &nbsp;·&nbsp; {ents}</div>', unsafe_allow_html=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">⬡ Epistemic Journey</div>', unsafe_allow_html=True)
+
+    phases, narrative = build_session_story(reports)
+    st.markdown(f'<div style="font-family:JetBrains Mono;font-size:.63rem;color:#8ab0c8;line-height:1.9;padding:.8rem;border:1px solid #0d2030;margin-bottom:1rem">{narrative}</div>', unsafe_allow_html=True)
+
+    if phases:
+        fig_j = go.Figure()
+        fig_j.add_trace(go.Scatter(
+            x=[p["n"] for p in phases], y=[p["belief"] for p in phases],
+            mode="lines", fill="tozeroy", fillcolor="rgba(0,255,200,0.04)",
+            line=dict(color=CYAN, width=2), name="BELIEF",
+            hovertemplate="Session %{x}<br>Belief: %{y:.1%}<extra></extra>",
+        ))
+        phase_symbols = {"BLIND": RED, "SEARCHING": AMBER, "SIGNAL": CYAN, "WEAK": "#6090c0"}
+        for pname, pcol in phase_symbols.items():
+            pts = [p for p in phases if p["phase"] == pname]
+            if pts:
+                fig_j.add_trace(go.Scatter(
+                    x=[p["n"] for p in pts], y=[p["belief"] for p in pts],
+                    mode="markers", name=pname,
+                    marker=dict(size=11, color=pcol, line=dict(width=2, color="#030608")),
+                    hovertemplate=f"<b>%{{x}}</b><br>Phase: {pname}<br>Belief: %{{y:.1%}}<extra></extra>",
+                ))
+        fig_j.add_hline(y=0.10, line_dash="dot", line_color=GRID_CLR, line_width=1,
+                        annotation_text="PRIOR 10%", annotation_font=dict(size=8, color=TEXT_CLR))
+        sig = [p for p in phases if p["phase"] == "SIGNAL"]
+        if sig:
+            fig_j.add_annotation(x=sig[0]["n"], y=sig[0]["belief"], text="⚡ Signal found",
+                showarrow=True, arrowhead=2, arrowcolor=CYAN, ax=25, ay=-35,
+                font=dict(size=8, color=CYAN, family="JetBrains Mono"))
+        dark_layout(fig_j, height=300)
+        fig_j.update_layout(
+            yaxis=dict(tickformat=".0%", range=[0, max(p["belief"] for p in phases)*1.4], gridcolor=GRID_CLR),
+            xaxis=dict(title="SESSION #", gridcolor=GRID_CLR, dtick=1),
+            legend=dict(orientation="h", y=1.12, x=0),
+        )
+        st.plotly_chart(fig_j, width="stretch")
+
+    st.markdown("""
+    <div style="display:flex;gap:1.5rem;font-family:JetBrains Mono;font-size:.55rem;margin:.5rem 0 1rem">
+      <span style="color:#ff5050">⬤ BLIND — no signal</span>
+      <span style="color:#e89040">⬤ SEARCHING — weak</span>
+      <span style="color:#00ffc8">⬤ SIGNAL — active</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">⬡ Change Direction</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-family:JetBrains Mono;font-size:.6rem;color:#2a5a7a;margin-bottom:.8rem">VERA is domain-agnostic. Swap the ontology and it reasons differently. Instantly.</div>', unsafe_allow_html=True)
+
+    avail = [f.stem for f in Path("ontologies").glob("*.yaml")] if Path("ontologies").exists() else ["uap"]
+    sw1, sw2 = st.columns([1, 2])
+    with sw1:
+        sel = st.selectbox("Ontology", options=avail, key="onto_sel")
+        if st.button("⬡ Activate", key="btn_onto", use_container_width=True):
+            st.success(f"Restart VERA with: ontologies/{sel}.yaml")
+    with sw2:
+        hypo = st.text_area("New Hypothesis", height=72, key="hypo_input",
+            placeholder="e.g. \'Financial fraud pharma 2020-2025\'\nVERA will reason about this instead.")
+        if st.button("⬡ Preview", key="btn_hypo", use_container_width=True):
+            if hypo.strip():
+                st.info(f"New domain: {hypo[:60]}\n→ Would create: ontologies/custom.yaml\n→ Run: python vera.py --ontology ontologies/custom.yaml")
+
+    st.markdown(f"""
+    <div style="margin-top:.8rem;padding:.7rem;background:#050a0f;border:1px solid #0d2030;font-family:JetBrains Mono;font-size:.58rem">
+      <span style="color:#2a5a7a">Current command:</span><br>
+      <span style="color:#00ffc8">python vera.py --ontology ontologies/{onto.get("domain","uap").lower().replace(" ","_")}.yaml --vault vault/</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 # Footer
 st.markdown("<hr>", unsafe_allow_html=True)
 fb1,fb2,fb3=st.columns([2,1,1])
 with fb2:
-    if st.button("⬡ Resonance Report", width="stretch"):
+    if st.button("⬡ Resonance Report", use_container_width=True):
         import subprocess as _sp
-        _r=_sp.run([sys.executable,".tools/irsanai_resonance_reporter.py"],
+        _rpath=str(Path(".tools")/"irsanai_resonance_reporter.py")
+        _r=_sp.run([sys.executable,_rpath],
                    capture_output=True,text=True)
         st.success("Report generated") if _r.returncode==0 else st.error(_r.stderr[:200])
 with fb3:
