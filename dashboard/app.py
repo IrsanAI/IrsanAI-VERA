@@ -483,8 +483,16 @@ with tab4:
     domain_name = onto.get("domain", "UAP Disclosure")
     _prior = onto.get("bayesian", {}).get("prior_tech_coverup", 0.10)
     seeds_high = onto.get("semantic_seeds", {}).get("high", [])
-    entities = onto.get("entities", [])
-    entity_names = [e.get("name","") for e in entities[:6]] if entities else []
+    _raw_e = onto.get("entities", []) or []
+    if isinstance(_raw_e, dict):
+        entity_names = list(_raw_e.keys())[:6]
+        entities = _raw_e
+    elif isinstance(_raw_e, list):
+        entities = _raw_e
+        entity_names = [e.get("name", "") if isinstance(e, dict) else str(e) for e in _raw_e[:6]]
+    else:
+        entities = []
+        entity_names = []
 
     d1, d2, d3 = st.columns(3)
     d1.metric("DOMAIN", domain_name.upper()[:16])
@@ -570,7 +578,7 @@ with tab4:
 
 # Footer
 st.markdown("<hr>", unsafe_allow_html=True)
-fb1,fb2,fb3=st.columns([2,1,1])
+fb1,fb2,fb3,fb4=st.columns([2,1,1,1])
 with fb2:
     if st.button("⬡ Resonance Report", use_container_width=True):
         import subprocess as _sp
