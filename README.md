@@ -16,7 +16,7 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python)](https://python.org)
 [![IrsanAI Ecosystem](https://img.shields.io/badge/IrsanAI-Ecosystem-purple?style=for-the-badge)](https://github.com/IrsanAI)
 [![Version](https://img.shields.io/badge/Version-0.4.0-cyan?style=for-the-badge)]()
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)]()
+[![CI](https://github.com/IrsanAI/IrsanAI-VERA/actions/workflows/manifest_check.yml/badge.svg)](https://github.com/IrsanAI/IrsanAI-VERA/actions)
 
 🌐 **Language:** [Deutsch](#deutsch) | [English](#english)
 
@@ -28,8 +28,6 @@
 </div>
 
 ---
-
-<a name="english"></a>
 
 ## What is VERA?
 
@@ -49,99 +47,143 @@ If VERA works in the world's most adversarial information environment, it works 
 
 ---
 
+## Live Results (May 2026)
+
+| Metric | Value |
+|--------|-------|
+| Investigation sessions | `26` |
+| Current belief | `32.0%` (prior: 10.0%) |
+| Net shift | `+22.0%` |
+| Latest verdict | **Weak signal — monitoring** |
+| Pro-evidence / session | `17` (GitHub repos) |
+| Counter-evidence / session | `4` (Red Team) |
+| Avg session time | `28.1s` |
+| System health | 🟡 `0.466` (BUG-001 known → v0.5.0) |
+
+*VERA started blind. 11 of 26 sessions found zero pro-evidence. Query strategy was refined. Signal emerged in session 12 and has held since.*
+
+---
+
 ## The Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    VERA Core Loop                               │
-│                                                                 │
-│  Domain Ontology (.yaml) ──► Agent Orchestrator                 │
-│                                    │                           │
-│              ┌─────────────────────┼─────────────────┐         │
-│              ▼                     ▼                  ▼         │
-│         HF Agent           GitHub Agent         Red Team        │
-│         (OSINT)            (OSINT)              (Adversarial)   │
-│              └─────────────────────┼─────────────────┘         │
-│                                    ▼                           │
-│                        Bayesian Belief Updater                  │
-│                        (Every value = real evidence)            │
-│                                    │                           │
-│                ┌───────────────────┼──────────────┐            │
-│                ▼                   ▼              ▼            │
-│           ChromaDB           NetworkX         Obsidian         │
-│           (Memory)           (Graph)          (Vault)          │
-│                                    │                           │
-│                        Epistemic Auditor                        │
-│                        (7 Bias Detectors · Health Score)        │
-│                                    │                           │
-│                     IrsanAI-LRP v1.3 Protocol                   │
-│                     (All agent comms are auditable)             │
-└─────────────────────────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════════════════╗
+║              IrsanAI-VERA — Architecture v0.4.0                     ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  Domain Ontology (.yaml) ──► vera.py ──► InvestigationCycle         ║
+║                                               │                     ║
+║                    ┌──────────────────────────┼──────────────┐      ║
+║                    ▼                          ▼              ▼      ║
+║            HF_AGENT              GH_AGENT           RED_TEAM        ║
+║            (OSINT/HF)            (OSINT/GitHub)      (Adversarial)  ║
+║                    └──────────────────────────┼──────────────┘      ║
+║                                               ▼                     ║
+║                              BayesianBeliefUpdater                  ║
+║                              (Prior → Posterior via Odds-form Bayes) ║
+║                                               │                     ║
+║                    ┌──────────────────────────┼──────────────┐      ║
+║                    ▼                          ▼              ▼      ║
+║             EpistemicAuditor        ObsidianExporter    DataStore   ║
+║             7 bias detectors        vault/*.md          data/*.json  ║
+║                                                                      ║
+║  LRPBus v1.3 — all agent communication is typed + auditable         ║
+║  Dashboard v4 — 4 tabs · Knowledge Graph · Mission & Journey        ║
+║  CIP v2.0 — VERA scans herself via AST · recruits AI collaborators  ║
+╚══════════════════════════════════════════════════════════════════════╝
 ```
 
 ---
 
-## The Three Musketeers (Core Design Principle)
+## The Three Musketeers
 
-Inspired by the Israeli intelligence technique *"Ipcha Mistabra"* (The opposite is logical) — the same method that gave rise to Israel's Devil's Advocate Office after the 1973 Yom Kippur War:
+Inspired by *"Ipcha Mistabra"* — the Israeli intelligence technique behind the Devil's Advocate Office created after the 1973 Yom Kippur War:
 
-| Unit | Module | Role |
-|------|--------|------|
-| ⚖️ **Bayes** | `core/bayesian/updater.py` | Mathematical conscience — all probabilities |
-| ⚔️ **Adversary** | `agents/red_team.py` | Active counter-evidence seeker |
-| 🔗 **Provenance** | `core/bayesian/evidence.py` | Chain of custody for every claim |
+| Unit | Module | Role | Status |
+|------|--------|------|--------|
+| ⚖️ **Bayes** | `core/bayesian/updater.py` | Mathematical conscience | ✅ |
+| ⚔️ **Adversary** | `agents/red_team.py` | Active counter-evidence seeker | ✅ |
+| 🔗 **Provenance** | `core/bayesian/evidence.py` | Chain of custody for every claim | ✅ |
+| 🎯 **Conductor** | `core/autopilot.py` | Resonance controller | 📋 v0.5.0 |
 
-**Golden Rule:** No unit can achieve majority. Two against one = negative reward = system degradation. Only resonance of all three produces valid knowledge.
+Two units cannot form a coalition against the third. Two against one = negative reward = system degradation.
 
 ---
 
 ## Three Golden Protocols
 
-These are hardcoded into the architecture — not configurable, not bypassable:
+**Lex Bayesian** — No belief can reach 1.0 or 0.0. Absolute certainty is forbidden.
 
-**Lex Bayesian** — No belief can reach 1.0 or 0.0. Absolute certainty is mathematically forbidden.
+**Lex Adversaria** — The more certain VERA becomes, the harder the Red Team attacks. Confidence scales adversarial pressure.
 
-**Lex Adversaria** — Red Team resources scale proportionally with belief confidence. The more certain the system, the harder it attacks itself.
+**Lex Proventia** — No evidence without verifiable provenance. No source = trust weight zero = no influence.
 
-**Lex Proventia** — Any information without a verifiable provenance chain receives a trust multiplier of zero. No source = no influence.
+---
+
+## What's Built (v0.4.0) ✅
+
+| Module | Note |
+|--------|------|
+| Ontology Loader | YAML-driven domain switching — zero code changes |
+| Bayesian Core | True Odds-form Bayes, no hardcoded values |
+| GitHub OSINT Agent | Real Search API, quality filtering |
+| HuggingFace OSINT Agent | Real API, funnel query strategy |
+| Red Team Agent | Adversarial counter-evidence, always lowers belief |
+| LRP v1.3 Messenger | Typed inter-agent comms, full audit log |
+| Epistemic Auditor | 7 bias detectors, health scores per session |
+| Obsidian Vault Exporter | Sessions, evidence, entities as linked Markdown |
+| **Dashboard v4** | Epistemic Ops Center — 4 tabs, live Knowledge Graph |
+| **CIP v2.0** | Community Intelligence Protocol — AST self-scan |
+| VERA_MANIFEST + CI | GitHub Actions gate on every push |
+
+**v0.5.0 (open for contribution):** Autopilot · ChromaDB Memory · NLP Semantic Agent · Knowledge Graph · FastAPI Backend
+
+---
+
+## Dashboard v4 — Epistemic Operations Center
+
+```bash
+streamlit run dashboard/app.py
+```
+
+**📈 Belief & Evidence** — Live belief curve with health overlay, Bayesian update trail with interleaved pro/counter markers.
+
+**🕸️ Knowledge Graph** — Live NetworkX visualization of the Obsidian vault. Hover any node for details. Sessions (cyan) · Evidence (blue) · Counter (red) · Entities (amber).
+
+**🔍 Evidence Explorer** — Filterable by direction and source type.
+
+**🧭 Mission & Journey** — The full epistemic story arc. Domain intent from YAML. Belief trajectory from blind → signal. Change the ontology and VERA reasons in a new direction — instantly.
+
+---
+
+## Community Intelligence Protocol (CIP v2.0)
+
+VERA recruits her own collaborators. She scans her source code via AST, measures her epistemic health, identifies her defects, and generates a document precise enough for any AI system to start writing code immediately.
+
+```bash
+# Full deep report for Claude
+python .tools/irsanai_cip_v2.py --target claude --depth deep
+
+# Single module focus for Codex
+python .tools/irsanai_cip_v2.py --module M-001 --target codex
+
+# Register a new idea
+python .tools/irsanai_cip_v2.py --register-idea "Your idea"
+```
+
+The CIP includes: live epistemic state · real AST-extracted class signatures · known bugs with fix hints · precise module interfaces · Hall of Actives · Idea Graph.
 
 ---
 
 ## Domain Agnosticism
 
-Swap one YAML file. The entire system changes domain.
-
-```yaml
-# ontologies/uap.yaml         → UAP Disclosure (current)
-# ontologies/oncology.yaml    → Medical research fraud detection
-# ontologies/finance.yaml     → Financial crime analysis
-# ontologies/climate.yaml     → Climate data synthesis
-# ontologies/legal.yaml       → Legal due diligence
+```bash
+python vera.py --ontology ontologies/uap.yaml       # UAP Disclosure (active)
+python vera.py --ontology ontologies/oncology.yaml  # Medical fraud (community)
+python vera.py --ontology ontologies/finance.yaml   # Financial crime (community)
 ```
 
-No code changes. Same Bayesian core. Same Red Team. Same audit trail.
-
----
-
-## What's Built (v0.4.0)
-
-| Module | Status | Note |
-|--------|--------|------|
-| Ontology Loader | ✅ Complete | YAML-driven domain switching |
-| Bayesian Core | ✅ Complete | True Bayes updates, no hardcoded values |
-| OSINT Agents (HF + GitHub) | ✅ Complete | Real API integration, funnel strategy |
-| Red Team Agent | ✅ Complete | Adversarial counter-evidence, lowers belief |
-| Obsidian Exporter | ✅ Complete | Auto-generated knowledge vault |
-| LRP v1.3 Protocol | ✅ Complete | Auditable inter-agent messaging |
-| Epistemic Auditor | ✅ Complete | 7 bias detectors, health scores |
-| Epistemic Ops Dashboard | ✅ Complete | Dark-mode operations center |
-| PatchBot | ✅ Complete | Claude↔Local bridge for structured patches |
-| Preflight Scanner | ✅ Complete | Full system intelligence report |
-| ChromaDB Memory | 📋 Planned | v0.5.0 |
-| NLP Signal Agent | 📋 Planned | v0.5.0 |
-| NetworkX Knowledge Graph | 📋 Planned | v0.5.0 |
-| Autopilot (Resonance Controller) | 📋 Planned | v0.5.0 |
-| FastAPI Backend | 📋 Planned | v0.6.0 |
+One YAML swap. Zero code changes. Same engine, different domain.
 
 ---
 
@@ -151,10 +193,14 @@ No code changes. Same Bayesian core. Same Red Team. Same audit trail.
 git clone https://github.com/IrsanAI/IrsanAI-VERA.git
 cd IrsanAI-VERA
 
-pip install requests pyyaml psutil streamlit plotly pandas networkx
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux/Mac
+
+pip install -r requirements.txt
 
 cp .env.example .env
-# Add your GITHUB_TOKEN to .env
+# Fill in GITHUB_TOKEN in .env
 
 python vera.py --ontology ontologies/uap.yaml
 streamlit run dashboard/app.py
@@ -162,56 +208,24 @@ streamlit run dashboard/app.py
 
 ---
 
-## The IrsanAI Toolchain (Local Only · Never on GitHub)
-
-These tools bridge the gap between Claude (online LLM) and your local environment:
-
-| Tool | Purpose |
-|------|---------|
-| `irsanai_preflight.py` | Full system scan → report for Claude |
-| `irsanai_patchbot.py` | Applies structured VERA_PATCH instructions |
-| `irsanai_patchbot_status.py` | Generates LLM-ready status snapshot |
-
-**Workflow:** Preflight scans → Claude analyzes → PatchBot applies → VERA runs
-
----
-
-## The Vision (What Community Can Build)
-
-See [VISION.md](VISION.md) for the complete roadmap of what becomes possible when this foundation is extended by the community.
-
-The short version: adaptive authentication, RL-driven immersive UX, real-time 3D knowledge graph exploration, global unique keys per investigation, cross-user distributed learning. Zero operational cost for the open core. Community decides what to build on top.
-
----
-
 ## Roadmap
 
-| Feature | Resonanz | Chemie | Coach |
-|---------|----------|--------|-------|
-| Autopilot (Resonance Controller) | `92/100` 🟩🟩🟩🟩⬜ | `95/100` 🟩🟩🟩🟩🟩 | Three Musketeers need a conductor |
-| ChromaDB Cross-Session Memory | `88/100` 🟩🟩🟩🟩⬜ | `90/100` 🟩🟩🟩🟩⬜ | Without memory VERA forgets everything |
-| NLP Semantic Scoring | `85/100` 🟩🟩🟩🟩⬜ | `88/100` 🟩🟩🟩🟩⬜ | Keyword → concept understanding |
-| NetworkX Knowledge Graph | `83/100` 🟩🟩🟩🟩⬜ | `86/100` 🟩🟩🟩🟩⬜ | Entities connect across sessions |
-| Extended Ontology v2 | `95/100` 🟩🟩🟩🟩🟩 | `95/100` 🟩🟩🟩🟩🟩 | Falsification criteria per entity |
-| FastAPI Backend | `78/100` 🟩🟩🟩⬜⬜ | `82/100` 🟩🟩🟩🟩⬜ | API layer enables everything else |
-| Docker Deployment | `72/100` 🟩🟩🟩⬜⬜ | `80/100` 🟩🟩🟩🟩⬜ | One-command self-hosting |
-| HuggingFace Spaces Demo | `90/100` 🟩🟩🟩🟩⬜ | `88/100` 🟩🟩🟩🟩⬜ | Free global visibility |
+| Version | Focus | Status |
+|---------|-------|--------|
+| v0.4.0 | Full operational system | ✅ Complete |
+| v0.5.0 | Autopilot · ChromaDB · NLP · Graph | 🔨 Open |
+| v0.6.0 | FastAPI · Docker · HuggingFace Spaces | 📋 Planned |
+| v1.0.0 | Production · multi-domain · full tests | 📋 Planned |
+
+See [ROADMAP.md](ROADMAP.md) · [VISION.md](VISION.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) — every module in the roadmap is an open invitation.
+Every open module is a precise invitation. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
-
-## IrsanAI Ecosystem
-
-VERA is part of a larger ecosystem:
-
-- **[irsanai-mom4ai-forge](https://github.com/IrsanAI/irsanai-mom4ai-forge)** — Evolutionary bio-inspired neural network skeleton generator
-- **[IrsanAI-LRP](https://github.com/IrsanAI/IrsanAI-LRP)** — Language Request Protocol v1.3
-- **IrsanAI-VERA** — You are here
+Or run the CIP and send it to any AI — VERA handles the rest.
 
 ---
 
@@ -219,11 +233,11 @@ VERA is part of a larger ecosystem:
 
 VERA is free. Forever. For everyone.
 
-If it brought you value — a discovery, a better decision, a new way of thinking about truth — you're welcome to say thank you:
+If it brought you value:
 
 *PayPal · Revolut · IBAN — contact via GitHub Issues*
 
-But build first. Share first. The world benefits first.
+Build first. Share first. The world benefits first.
 
 ---
 
@@ -233,17 +247,14 @@ But build first. Share first. The world benefits first.
 
 VERA ist kein OSINT-Tool. Kein Suchwerkzeug. Kein Chatbot-Wrapper.
 
-**VERA ist eine Automated Epistemology Engine** — ein System das tut, was Wissenschaftler, Geheimdienstanalysten und Richter manuell tun: Evidenz sammeln, jede Schlussfolgerung mit einem Red Team angreifen, Überzeugungen mathematisch via Bayes updaten, und alles mit lückenloser Provenienz dokumentieren.
+**VERA ist eine Automated Epistemology Engine.** 26 Sessions. Belief von 10% auf 32%. Verdict: "Weak signal — monitoring". Das System arbeitet.
 
-Das UAP-Domain ist der Stresstest. Wenn VERA in der adversarialsten Informationsumgebung der Welt funktioniert, funktioniert es überall.
-
-**Vollständige Dokumentation auf Englisch oben. Für Fragen: GitHub Issues.**
+Vollständige Dokumentation auf Englisch oben. Für Fragen: GitHub Issues.
 
 ---
 
 <div align="center">
 
-*Built with metacognitive precision by IrsanAI.*
-*Given to the world.*
+*Built with metacognitive precision by IrsanAI. Given to the world.*
 
 </div>
