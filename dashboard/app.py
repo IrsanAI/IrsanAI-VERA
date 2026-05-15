@@ -580,12 +580,24 @@ with tab4:
 st.markdown("<hr>", unsafe_allow_html=True)
 fb1,fb2,fb3,fb4=st.columns([2,1,1,1])
 with fb2:
-    if st.button("⬡ Resonance Report", use_container_width=True):
+    if st.button("⬡ Resonance Report", width="stretch"):
         import subprocess as _sp
-        _rpath=str(Path(".tools")/"irsanai_resonance_reporter.py")
-        _r=_sp.run([sys.executable,_rpath],
-                   capture_output=True,text=True)
-        st.success("Report generated") if _r.returncode==0 else st.error(_r.stderr[:200])
+        import os as _os
+        _root = Path(__file__).parent.parent
+        _rpath = _root / ".tools" / "irsanai_resonance_reporter.py"
+        _env = {**_os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+        _r = _sp.run(
+            [sys.executable, "-X", "utf8", str(_rpath)],
+            capture_output=True, cwd=str(_root),
+            env=_env
+        )
+        _out = (_r.stdout or _r.stderr or b"Unknown error")
+        if isinstance(_out, bytes):
+            _out = _out.decode("utf-8", errors="replace")
+        if _r.returncode == 0:
+            st.success("✅ Report generated — check .tools/reports/")
+        else:
+            st.error(_out.strip()[-300:])
 with fb3:
     st.markdown(
         '<a href="https://github.com/IrsanAI/IrsanAI-VERA" target="_blank" '
