@@ -28,6 +28,7 @@
 </div>
 
 ---
+![Dashboard](docs/dashboard_preview.png)
 
 ## What is VERA?
 

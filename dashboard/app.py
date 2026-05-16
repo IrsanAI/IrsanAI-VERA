@@ -605,8 +605,49 @@ with fb3:
         'text-decoration:none;border:1px solid #00ffc8;padding:5px 12px;'
         'display:inline-block;margin-top:3px">⬡ GitHub</a>',
         unsafe_allow_html=True)
+if st.session_state.get("show_cip") and st.session_state.get("cip_content"):
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">⬡ One-Click Collaboration — Paste to your AI</div>', unsafe_allow_html=True)
+    _c1, _c2 = st.columns([3, 1])
+    with _c1:
+        st.text_area("CIP v2.0", value=st.session_state["cip_content"],
+                     height=300, key="cip_display")
+    with _c2:
+        st.markdown("""<div style="font-family:JetBrains Mono;font-size:.55rem;color:#2a5a7a;line-height:2.2">
+          <span style="color:#00ffc8">▸ Fix BUG-001:</span><br>"Implement the interleaving fix in BUG-001"<br><br>
+          <span style="color:#00ffc8">▸ New Ontology:</span><br>"Generate finance.yaml following the schema"<br><br>
+          <span style="color:#00ffc8">▸ Build M-002:</span><br>"Implement ChromaDB store as specified"<br><br>
+          <span style="color:#00ffc8">▸ Full analysis:</span><br>"Suggest highest-impact next step"
+        </div>""", unsafe_allow_html=True)
+        if st.button("✕ Close", key="close_cip"):
+            st.session_state["show_cip"] = False
+            st.rerun()
 st.markdown(f"""
 <div style="font-family:JetBrains Mono;font-size:.48rem;color:#0d2030;text-align:center;padding:.8rem 0;letter-spacing:.2em">
   IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now} &nbsp;·&nbsp;
   <a href="https://github.com/IrsanAI/IrsanAI-VERA" style="color:#0d2030">github.com/IrsanAI/IrsanAI-VERA</a>
 </div>""", unsafe_allow_html=True)
+with fb4:
+    if st.button("⬡ CIP v2", width="stretch", help="One-Click: generate CIP for any AI"):
+        import subprocess as _sp2
+        import os as _os2
+        _root2 = Path(__file__).parent.parent
+        _cpath2 = _root2 / ".tools" / "irsanai_cip_v2.py"
+        _env2 = {**_os2.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+        if _cpath2.exists():
+            _r2 = _sp2.run([sys.executable, "-X", "utf8", str(_cpath2),
+                            "--target", "claude", "--depth", "deep"],
+                           capture_output=True, cwd=str(_root2), env=_env2)
+            _out2 = (_r2.stdout or _r2.stderr or b"")
+            if isinstance(_out2, bytes):
+                _out2 = _out2.decode("utf-8", errors="replace")
+            if _r2.returncode == 0:
+                _cip_files = sorted((_root2/".tools"/"reports").glob("cip_v2_*.md"), reverse=True)
+                if _cip_files:
+                    st.session_state["cip_content"] = _cip_files[0].read_text(encoding="utf-8")
+                    st.session_state["show_cip"] = True
+                    st.success("CIP v2 ready")
+            else:
+                st.error(_out2[-200:])
+        else:
+            st.warning("irsanai_cip_v2.py not found")

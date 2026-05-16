@@ -1,0 +1,18 @@
+VERA_PATCH v1
+---
+FILE: .gitignore
+ACTION: REPLACE_LINE
+LINE_CONTAINS: # ── Resonance Reporter ──
+WITH: # ── Local Toolchain (never on GitHub) ──────────────────────────
+tools/
+.tools/
+irsanai_preflight*.py
+irsanai_patchbot*.py
+irsanai_resonance_reporter*.py
+patch_*.txt
+resonance_report_*.md
+patchbot_status_*.md
+auto_repair_*.txt
+irsanai_preflight_*.md
+REASON: Alle lokalen Tools und ihre Outputs komplett aus Git raushalten. Sauberes Root.
+---
