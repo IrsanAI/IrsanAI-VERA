@@ -314,7 +314,7 @@ class InvestigationCycle:
 
         # 8. Update Knowledge Graph (M-004)
         try:
-            with open(report_path, "r") as f:
+            with open(report_path, "r", encoding="utf-8") as f:
                 report_data = json.load(f)
             self.graph.ingest_session(report_data, self.session_id)
             if not self.skip_obsidian:
