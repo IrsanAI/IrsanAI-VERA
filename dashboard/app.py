@@ -692,7 +692,7 @@ with fb4:
                 if _cip_files:
                     st.session_state["cip_content"] = _cip_files[0].read_text(encoding="utf-8")
                     st.session_state["show_cip"] = True
-                    st.success("CIP v2 ready")
+                    st.rerun()
             else:
                 st.error(_out2[-200:])
         else:
