@@ -20,6 +20,7 @@ import requests
 from core.bayesian.updater import Evidence
 from core.lrp_messenger import LRPBus, MessageType, Intent
 from core.ontology_loader import DomainOntology
+from core.memory.chromadb_store import VERAMemoryStore
 
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
 AGENT_NAME = "GITHUB_OSINT_AGENT"
@@ -41,6 +42,10 @@ class GitHubOSINTAgent:
         self.bus = bus
         self.session_id = session_id
         self._token = github_token or os.environ.get("GITHUB_TOKEN")
+        try:
+            self.memory = VERAMemoryStore()
+        except Exception:
+            self.memory = None
 
     def _headers(self) -> dict:
         h = {"Accept": "application/vnd.github+json", "User-Agent": "IrsanAI-VERA/0.4.0"}
@@ -134,6 +139,11 @@ class GitHubOSINTAgent:
                 url = repo.get("html_url", "")
                 if not url or url in seen_urls or repo.get("archived"):
                     continue
+                
+                # BUG-003: Check cross-session memory
+                if self.memory and self.memory.has_seen_url(url):
+                    continue
+
                 if not self._is_recent(repo.get("pushed_at", "")):
                     continue
                 seen_urls.add(url)
@@ -160,6 +170,14 @@ class GitHubOSINTAgent:
                     raw_snippet=(repo.get("description") or "")[:200] or None,
                 )
                 all_evidence.append(ev)
+                
+                # Store in memory
+                if self.memory:
+                    try:
+                        self.memory.store_evidence(ev, self.session_id)
+                    except Exception:
+                        pass
+
                 self.bus.send(self.bus.create_message(
                     sender=AGENT_NAME, receiver="ORCHESTRATOR",
                     msg_type=MessageType.EVIDENCE, intent=Intent.SEARCH,

@@ -18,7 +18,10 @@ import uuid
 from pathlib import Path
 
 from core.auditor import EpistemicAuditor
+from core.autopilot import AutopilotController
 from core.bayesian.updater import BayesianBeliefUpdater, Evidence
+from agents.nlp_signal import NLPSignalAgent
+from core.graph.knowledge_graph import VERAKnowledgeGraph
 from core.lrp_messenger import LRPBus, MessageType, Intent
 from core.ontology_loader import DomainOntology
 from obsidian_writer.exporter import ObsidianExporter
@@ -62,6 +65,9 @@ class InvestigationCycle:
             data_dir=self.data_dir,
             session_id=self.session_id,
         )
+        self.autopilot = AutopilotController(bus=self.bus)
+        self.nlp_agent = NLPSignalAgent()
+        self.graph = VERAKnowledgeGraph()
 
         if not self.skip_obsidian:
             self.exporter = ObsidianExporter(
@@ -133,12 +139,8 @@ class InvestigationCycle:
         Feed evidence through Bayesian updater and run Epistemic Auditor
         on each individual update.
         """
-        # Pro evidence first (epistemically neutral ordering),
-        # then counter evidence. Auditor monitors for drift.
-        sorted_ev = sorted(
-            evidence_list,
-            key=lambda e: (not e.supports_hypothesis, -e.semantic_score)
-        )
+        # Use Autopilot to enforce interleaving
+        sorted_ev = self.autopilot.enforce_interleaving(evidence_list)
 
         for ev in sorted_ev:
             prior = self.updater.belief
@@ -238,6 +240,15 @@ class InvestigationCycle:
         self._log("ORCHESTRATOR", "Dispatching agents...", 1.0)
         evidence_list, queries = self._collect_evidence()
 
+        # 1.5 Semantic Rescoring (M-003 / BUG-002)
+        if evidence_list:
+            self._log("NLP_SIGNAL", f"Rescoring {len(evidence_list)} evidence pieces...", 0.90)
+            original_count = len(evidence_list)
+            evidence_list = self.nlp_agent.rescore_batch(evidence_list, self.ontology)
+            removed = original_count - len(evidence_list)
+            if removed > 0:
+                self._log("NLP_SIGNAL", f"Rejected {removed} false positives via semantic scoring", 0.95)
+
         # 2. Check minimum threshold
         if len(evidence_list) < self.ontology.bayesian.min_evidence_for_update:
             self._log(
@@ -300,5 +311,16 @@ class InvestigationCycle:
         # 7. Save report
         report_path = self._save_report(evidence_list, queries, audit_summary)
         self._log("SAVE", f"Report: {report_path}", 1.0)
+
+        # 8. Update Knowledge Graph (M-004)
+        try:
+            with open(report_path, "r") as f:
+                report_data = json.load(f)
+            self.graph.ingest_session(report_data, self.session_id)
+            if not self.skip_obsidian:
+                self.graph.export_to_obsidian(self.vault_dir)
+            self._log("GRAPH", "Knowledge graph updated", 1.0)
+        except Exception as e:
+            self._log("GRAPH", f"Error updating graph: {e}", 0.20)
 
         return bs
