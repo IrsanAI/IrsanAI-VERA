@@ -607,21 +607,67 @@ with fb3:
         unsafe_allow_html=True)
 if st.session_state.get("show_cip") and st.session_state.get("cip_content"):
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown('<div class="sec-label">⬡ One-Click Collaboration — Paste to your AI</div>', unsafe_allow_html=True)
-    _c1, _c2 = st.columns([3, 1])
-    with _c1:
-        st.text_area("CIP v2.0", value=st.session_state["cip_content"],
-                     height=300, key="cip_display")
-    with _c2:
-        st.markdown("""<div style="font-family:JetBrains Mono;font-size:.55rem;color:#2a5a7a;line-height:2.2">
-          <span style="color:#00ffc8">▸ Fix BUG-001:</span><br>"Implement the interleaving fix in BUG-001"<br><br>
-          <span style="color:#00ffc8">▸ New Ontology:</span><br>"Generate finance.yaml following the schema"<br><br>
-          <span style="color:#00ffc8">▸ Build M-002:</span><br>"Implement ChromaDB store as specified"<br><br>
-          <span style="color:#00ffc8">▸ Full analysis:</span><br>"Suggest highest-impact next step"
-        </div>""", unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">⬡ Community Intelligence Protocol v2.0</div>',
+                unsafe_allow_html=True)
+
+    _cip_txt = st.session_state["cip_content"]
+    _ts_cip = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Aktionszeile
+    _dl1, _dl2, _dl3 = st.columns([1, 1, 2])
+    with _dl1:
+        st.download_button(
+            label="⬡ Download .md",
+            data=_cip_txt.encode("utf-8"),
+            file_name=f"vera_cip_{_ts_cip}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with _dl2:
         if st.button("✕ Close", key="close_cip"):
             st.session_state["show_cip"] = False
             st.rerun()
+    with _dl3:
+        st.markdown(
+            '<div style="font-family:JetBrains Mono;font-size:.55rem;color:#2a5a7a;'
+            'padding-top:.4rem">Paste into Claude · ChatGPT · Gemini · Codex · Grok</div>',
+            unsafe_allow_html=True)
+
+    # Tabs: Rendered | Raw | Prompts
+    _vt1, _vt2, _vt3 = st.tabs(["📖 Rendered", "📋 Copy-Ready", "⚡ Quick Prompts"])
+
+    with _vt1:
+        st.markdown(_cip_txt)
+
+    with _vt2:
+        st.text_area("Select all → Ctrl+A → Copy → Paste to AI",
+                     value=_cip_txt, height=400, key="cip_raw")
+
+    with _vt3:
+        st.markdown("""
+<div style="font-family:JetBrains Mono;font-size:.62rem;line-height:2.4">
+
+<span style="color:#00ffc8">▸ BUG-001 Fix (höchste Priorität):</span><br>
+<code style="color:#8ab0c8;font-size:.55rem">
+[Paste CIP above] + "Implement the interleaving fix for BUG-001 in core/investigation_cycle.py"
+</code><br><br>
+
+<span style="color:#00ffc8">▸ Neue Ontologie erstellen:</span><br>
+<code style="color:#8ab0c8;font-size:.55rem">
+[Paste CIP above] + "Generate a working finance.yaml following the exact schema shown"
+</code><br><br>
+
+<span style="color:#00ffc8">▸ M-002 ChromaDB bauen:</span><br>
+<code style="color:#8ab0c8;font-size:.55rem">
+[Paste CIP above] + "Implement VERAMemoryStore exactly as specified in M-002"
+</code><br><br>
+
+<span style="color:#00ffc8">▸ Vollanalyse:</span><br>
+<code style="color:#8ab0c8;font-size:.55rem">
+[Paste CIP above] + "Analyze VERA's epistemic state and implement the highest-impact improvement"
+</code>
+
+</div>""", unsafe_allow_html=True)
 st.markdown(f"""
 <div style="font-family:JetBrains Mono;font-size:.48rem;color:#0d2030;text-align:center;padding:.8rem 0;letter-spacing:.2em">
   IRSANAI-VERA v0.4.0 &nbsp;·&nbsp; {len(reports)} SESSIONS &nbsp;·&nbsp; {ts_now} &nbsp;·&nbsp;
