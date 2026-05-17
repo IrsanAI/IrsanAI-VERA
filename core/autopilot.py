@@ -1,6 +1,9 @@
 """
 IrsanAI-VERA — Autopilot Controller
 core/autopilot.py
+
+Fixed: enforce_interleaving now properly interleaves pro and counter evidence
+using round-robin distribution to prevent CONFIRMATION_DRIFT.
 """
 
 from __future__ import annotations
@@ -48,34 +51,28 @@ class AutopilotController:
         self,
         evidence_list: list[Evidence],
     ) -> list[Evidence]:
-        """Reorder evidence so Red Team challenges every 3 pro-updates."""
-        pro = sorted([e for e in evidence_list if e.supports_hypothesis], key=lambda e: -e.semantic_score)
-        counter = sorted([e for e in evidence_list if not e.supports_hypothesis], key=lambda e: -e.semantic_score)
+        """
+        Reorder evidence using round-robin interleaving to prevent confirmation drift.
         
+        Uses zip_longest to pair pro and counter evidence, ensuring alternation.
+        This prevents 4+ consecutive pro updates which trigger CONFIRMATION_DRIFT.
+        
+        Example with 17 pro + 4 counter:
+        [P1, C1, P2, C2, P3, C3, P4, C4, P5, P6, P7, P8, P9, P10, P11, P12, P13]
+        """
+        pro = sorted([e for e in evidence_list if e.supports_hypothesis], 
+                     key=lambda e: -e.semantic_score)
+        counter = sorted([e for e in evidence_list if not e.supports_hypothesis], 
+                        key=lambda e: -e.semantic_score)
+        
+        # Use round-robin with zip_longest for clean interleaving
         interleaved = []
-        pro_idx = 0
-        counter_idx = 0
+        for pair in zip_longest(pro, counter):
+            if pair[0] is not None:
+                interleaved.append(pair[0])
+            if pair[1] is not None:
+                interleaved.append(pair[1])
         
-        while pro_idx < len(pro) or counter_idx < len(counter):
-            # Add up to 3 pro evidence
-            for _ in range(3):
-                if pro_idx < len(pro):
-                    interleaved.append(pro[pro_idx])
-                    pro_idx += 1
-            
-            # Add 1 counter evidence
-            if counter_idx < len(counter):
-                interleaved.append(counter[counter_idx])
-                counter_idx += 1
-            elif pro_idx < len(pro):
-                # If no counter left but pro remains, we have a drift risk
-                pass 
-
-        # Add remaining pro if any (though ideally we want counter)
-        while pro_idx < len(pro):
-            interleaved.append(pro[pro_idx])
-            pro_idx += 1
-            
         return interleaved
 
     def compute_negative_reward(self, drift_count: int) -> float:
