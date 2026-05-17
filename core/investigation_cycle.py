@@ -133,11 +133,6 @@ class InvestigationCycle:
         return all_evidence, queries_used
 
     def _update_beliefs_with_audit(self, evidence_list: list[Evidence]) -> None:
-        """
-        Feed evidence through Bayesian updater and run Epistemic Auditor
-        on each individual update.
-        """
-        # Use Autopilot to enforce interleaving
         sorted_ev = self.autopilot.enforce_interleaving(evidence_list)
 
         for ev in sorted_ev:
@@ -146,7 +141,6 @@ class InvestigationCycle:
             posterior = self.updater.belief
             lr = ev.likelihood_ratio()
 
-            # Audit every single update
             self.auditor.audit_update(
                 prior=prior,
                 posterior=posterior,
@@ -228,12 +222,13 @@ class InvestigationCycle:
         return report_path
 
     def run(self) -> dict:
+        separator = '=' * 65
         print(f"
-{'='*65}")
+{separator}")
         print(f"  IrsanAI-VERA v0.4.1 — {self.ontology.domain}")
         print(f"  Session: {self.session_id}")
         print(f"  Prior belief: {self.updater.belief:.1%}")
-        print(f"{'='*65}
+        print(f"{separator}
 ")
 
         # 1. Collect evidence
@@ -287,12 +282,12 @@ class InvestigationCycle:
         health_icon = "🟢" if health > 0.8 else "🟡" if health > 0.5 else "🔴"
 
         print(f"
-{'='*65}")
+{separator}")
         print(f"  VERDICT:  {verdict.label}")
         print(f"  Belief:   {bs['current_belief']:.1%}  (prior: {bs['prior']:.1%})")
         print(f"  Evidence: {bs['pro_evidence']} pro / {bs['counter_evidence']} counter")
         print(f"  Health:   {health_icon} {health:.3f}/1.000  ({audit_summary['total_warnings']} warnings)")
-        print(f"{'='*65}
+        print(f"{separator}
 ")
 
         if audit_summary["total_warnings"] > 0:
