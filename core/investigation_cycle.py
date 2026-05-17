@@ -222,6 +222,7 @@ class InvestigationCycle:
         return report_path
 
     def run(self) -> dict:
+<<<<<<< Updated upstream
         separator = '=' * 65
         print(f"
 {separator}")
@@ -230,6 +231,13 @@ class InvestigationCycle:
         print(f"  Prior belief: {self.updater.belief:.1%}")
         print(f"{separator}
 ")
+=======
+        print(f"{'='*65}")
+        print(f"  IrsanAI-VERA v0.4.1 — {self.ontology.domain}")
+        print(f"  Session: {self.session_id}")
+        print(f"  Prior belief: {self.updater.belief:.1%}")
+        print(f"{'='*65}")
+>>>>>>> Stashed changes
 
         # 1. Collect evidence
         self._log("ORCHESTRATOR", "Dispatching agents...", 1.0)
@@ -281,14 +289,22 @@ class InvestigationCycle:
         health = audit_summary["health_score"]
         health_icon = "🟢" if health > 0.8 else "🟡" if health > 0.5 else "🔴"
 
+<<<<<<< Updated upstream
         print(f"
 {separator}")
+=======
+        print(f"{'='*65}")
+>>>>>>> Stashed changes
         print(f"  VERDICT:  {verdict.label}")
         print(f"  Belief:   {bs['current_belief']:.1%}  (prior: {bs['prior']:.1%})")
         print(f"  Evidence: {bs['pro_evidence']} pro / {bs['counter_evidence']} counter")
         print(f"  Health:   {health_icon} {health:.3f}/1.000  ({audit_summary['total_warnings']} warnings)")
+<<<<<<< Updated upstream
         print(f"{separator}
 ")
+=======
+        print(f"{'='*65}")
+>>>>>>> Stashed changes
 
         if audit_summary["total_warnings"] > 0:
             self._log(
