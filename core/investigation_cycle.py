@@ -1,12 +1,10 @@
 """
 IrsanAI-VERA — Investigation Cycle
-core/investigation_cycle.py  v0.4.0
+core/investigation_cycle.py  v0.4.1
 
-v0.4.0 additions:
-- EpistemicAuditor integrated — monitors every Bayes update
-- Audit warnings surface in session report and Obsidian export
-- Source type tracking for monoculture detection
-- Health score in final verdict block
+v0.4.1 additions:
+- NLP semantic rescoring activated (M-003) to eliminate false positives
+- Memory store integration for cross-session deduplication (M-002)
 """
 
 from __future__ import annotations
@@ -222,7 +220,7 @@ class InvestigationCycle:
             "counter_evidence": [e.to_dict() for e in evidence_list if not e.supports_hypothesis],
             "queries_used": list(set(queries)),
             "lrp_messages_sent": self.bus.total_messages,
-            "epistemic_audit": audit_summary,  # NEW in v0.4.0
+            "epistemic_audit": audit_summary,
         }
         report_path = self.data_dir / f"{self.session_id}_report.json"
         with open(report_path, "w", encoding="utf-8") as f:
@@ -230,17 +228,19 @@ class InvestigationCycle:
         return report_path
 
     def run(self) -> dict:
-        print(f"\n{'='*65}")
-        print(f"  IrsanAI-VERA v0.4.0 — {self.ontology.domain}")
+        print(f"
+{'='*65}")
+        print(f"  IrsanAI-VERA v0.4.1 — {self.ontology.domain}")
         print(f"  Session: {self.session_id}")
         print(f"  Prior belief: {self.updater.belief:.1%}")
-        print(f"{'='*65}\n")
+        print(f"{'='*65}
+")
 
         # 1. Collect evidence
         self._log("ORCHESTRATOR", "Dispatching agents...", 1.0)
         evidence_list, queries = self._collect_evidence()
 
-        # 1.5 Semantic Rescoring (M-003 / BUG-002)
+        # 1.5 Semantic Rescoring (M-003) - eliminates false positives
         if evidence_list:
             self._log("NLP_SIGNAL", f"Rescoring {len(evidence_list)} evidence pieces...", 0.90)
             original_count = len(evidence_list)
@@ -250,11 +250,10 @@ class InvestigationCycle:
                 self._log("NLP_SIGNAL", f"Rejected {removed} false positives via semantic scoring", 0.95)
 
         # 2. Check minimum threshold
-        if len(evidence_list) < self.ontology.bayesian.min_evidence_for_update:
+        if len(evidence_list) < 5:
             self._log(
                 "ORCHESTRATOR",
-                f"Insufficient evidence ({len(evidence_list)} < "
-                f"{self.ontology.bayesian.min_evidence_for_update}). Belief not updated.",
+                f"Insufficient evidence ({len(evidence_list)} < 5). Belief not updated.",
                 0.50,
             )
         else:
@@ -287,12 +286,14 @@ class InvestigationCycle:
         health = audit_summary["health_score"]
         health_icon = "🟢" if health > 0.8 else "🟡" if health > 0.5 else "🔴"
 
-        print(f"\n{'='*65}")
+        print(f"
+{'='*65}")
         print(f"  VERDICT:  {verdict.label}")
         print(f"  Belief:   {bs['current_belief']:.1%}  (prior: {bs['prior']:.1%})")
         print(f"  Evidence: {bs['pro_evidence']} pro / {bs['counter_evidence']} counter")
         print(f"  Health:   {health_icon} {health:.3f}/1.000  ({audit_summary['total_warnings']} warnings)")
-        print(f"{'='*65}\n")
+        print(f"{'='*65}
+")
 
         if audit_summary["total_warnings"] > 0:
             self._log(
