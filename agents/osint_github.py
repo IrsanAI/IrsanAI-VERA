@@ -1,9 +1,10 @@
 """
-IrsanAI-VERA — GitHub OSINT Agent v2.1
+IrsanAI-VERA — GitHub OSINT Agent v2.2
 agents/osint_github.py
 
-Fix v2.1: Score threshold 0.05 → 0.01, stars-only repos accepted,
-debug logging for zero-result diagnosis.
+Fix v2.2:
+- Memory store is now mandatory (no silent fail)
+- Uses VERAMemoryStore to prevent duplicate URLs across sessions (M-002)
 """
 
 from __future__ import annotations
@@ -42,10 +43,8 @@ class GitHubOSINTAgent:
         self.bus = bus
         self.session_id = session_id
         self._token = github_token or os.environ.get("GITHUB_TOKEN")
-        try:
-            self.memory = VERAMemoryStore()
-        except Exception:
-            self.memory = None
+        # M-002: Memory store is now mandatory
+        self.memory = VERAMemoryStore()
 
     def _headers(self) -> dict:
         h = {"Accept": "application/vnd.github+json", "User-Agent": "IrsanAI-VERA/0.4.0"}
@@ -140,8 +139,8 @@ class GitHubOSINTAgent:
                 if not url or url in seen_urls or repo.get("archived"):
                     continue
                 
-                # BUG-003: Check cross-session memory
-                if self.memory and self.memory.has_seen_url(url):
+                # M-002: Check cross-session memory - prevents duplicates
+                if self.memory.has_seen_url(url):
                     continue
 
                 if not self._is_recent(repo.get("pushed_at", "")):
@@ -171,12 +170,8 @@ class GitHubOSINTAgent:
                 )
                 all_evidence.append(ev)
                 
-                # Store in memory
-                if self.memory:
-                    try:
-                        self.memory.store_evidence(ev, self.session_id)
-                    except Exception:
-                        pass
+                # M-002: Store in memory for cross-session deduplication
+                self.memory.store_evidence(ev, self.session_id)
 
                 self.bus.send(self.bus.create_message(
                     sender=AGENT_NAME, receiver="ORCHESTRATOR",
